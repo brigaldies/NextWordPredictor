@@ -1,0 +1,829 @@
+---
+title: "Milestone Report on the Development of a Next-Word Predictor"
+author: "Bertrand Rigaldies"
+date: "Fall 2016"
+output: html_document
+---
+
+```{r global_options, echo=FALSE, warning=FALSE, message=FALSE, error=TRUE}
+require(dplyr)
+require(ggplot2)
+require(grid)
+require(gridExtra)
+require(xtable)
+require(htmlTable)
+require(tm) # Corpus and n-gram models.
+require(RWeka) # For tokenizer.
+require(ngram) # For 'concat' function.
+options(table_counter = TRUE)
+# opts_chunk$set(warning=FALSE, message=FALSE, error=TRUE)
+fig_num = 1
+```
+
+## Introduction
+
+This is the "Milestone Report" in the Coursera Data Science specialization Capstone class. Towards the class' project goal of developing a predictive model for next-word prediction using Natural Language Processing (NLP) techniques, the report summarizes the following steps which have been taken thus far:
+
+1. Downloading the  training data from the Coursera-provided source.
+1. Load the training data, and provides some basic metrics (Number of lines, words, etc.)
+1. Perform an n-grams analysis.
+
+As closing remarks, the report proposes a development methodology to design, implement, and test our next-word predictor. We also propose the general outlines of a Shiny application to allow the public to test/play with the predictor.
+
+All the R code used by the report is provided in the appendix at the end of the report.
+
+### Acknowledgments
+
+The following information sources were instrumental in conducting the research for, and producing, this report:
+
+1. My fellow class mates on the class forum!
+1. A bunch of articles suggested by the forum, most notably:
+    + [Gentle Introduction to Text Mining Using R](https://eight2late.wordpress.com/2015/05/27/a-gentle-introduction-to-text-mining-using-r/)
+    + [Basic Text Mining in R](https://rstudio-pubs-static.s3.amazonaws.com/31867_8236987cf0a8444e962ccd2aec46d9c3.html#plot-word-frequencies)
+    + [Bigrams and Trigrams](https://english.boisestate.edu/johnfry/files/2013/04/bigram-2x2.pdf)
+1. The Wikipedia page on the [Katz's Back-Off Model](https://en.wikipedia.org/wiki/Katz%27s_back-off_model).
+1. And, last, but not least, stackoverflow.com! What would we do witout it?
+
+## Corpus Documents
+
+```{r corpus-files, echo=FALSE, warning=FALSE, message=FALSE, error=TRUE, cache=TRUE}
+# Change to your local directory
+corpus_directory_en = 'C:\\training\\coursera\\datascience\\Capstone\\dataset\\final\\en_US'
+dirSource = DirSource(directory = corpus_directory_en, pattern = '^en_US(.)*txt$')
+files = unlist(lapply(dirSource$filelist, function(pathname) {unlist(strsplit(pathname, split = '/'))[2]}))
+```
+
+We will be using the Coursera-provided **english** version of the Corpus from [HC Corpora](www.corpora.heliohost.org) as training, test, and validation data to develop our predictive model. The Corpus contains the `r length(files)` files, or documents, as listed in Table `r tblNoNext()`. For each file in the Corpus, the following attributes are calculated:
+
+1. **Lines Count**: The total number of lines.
+1. **Rough Words Count**: The total number of words, calculated with a rudimentary tokenization using spaces and punctuation as separators in the R `strsplit` function.
+1. **Min Line Length**: The minimum number of characters in a line.
+1. **Max Line Length**: The maximum number of characters in a line.
+1. **Average Line Length**: The average number of characters in a line.
+
+```{r inspect-files, echo=FALSE, warning=FALSE, message=FALSE, error=TRUE, cache=TRUE}
+getFileStats <- function(filepath) {    
+    message(paste('Processing', filepath))
+    cnx = file(filepath, open = "r")
+    totalLinesCount = 0
+    lineLengths = c()    
+    totalWordsCount = 0
+    linesChunkSize = 100000
+    while (TRUE) {
+        lines = readLines(cnx, n = linesChunkSize, encoding = "UTF-8")  
+        linesCount = length(lines)
+        totalLinesCount = totalLinesCount + linesCount
+        if (linesCount == 0 ) {            
+            break # print("Reached EOF")
+        }        
+        lineLengths = c(lineLengths, unlist(lapply(lines, function(line) { nchar(line)})))    
+        totalWordsCount = totalWordsCount + sum(unlist(lapply(lines, function(line) { s = strsplit(line, split = '(\\s+)|[.,;:/!?]')[[1]]; s = s[s!=""]; length(s)})))        
+    }
+    minLineLength = min(lineLengths)
+    maxLineLength = max(lineLengths)
+    meanLineLength = round(mean(lineLengths))
+    message(paste(filepath, "- lines count     :", totalLinesCount))
+    message(paste(filepath, "- words count     :", totalWordsCount))
+    message(paste(filepath, "- min line length :", minLineLength))    
+    message(paste(filepath, "- max line length :", maxLineLength))
+    message(paste(filepath, "- mean line length:", meanLineLength))
+    close(cnx)
+    # Returns the file's stats:
+    c(
+        format(totalLinesCount, big.mark=",", scientific=FALSE),
+        format(totalWordsCount, big.mark=",", scientific=FALSE),
+        format(minLineLength, big.mark=",", scientific=FALSE),
+        format(maxLineLength, big.mark=",", scientific=FALSE),
+        format(meanLineLength, big.mark=",", scientific=FALSE)
+    )
+}
+
+fileLinesCountList = lapply(dirSource$filelist, function(filepath) { getFileStats(filepath)})
+```
+```{r display-files-metrics, echo=FALSE, warning=FALSE, message=FALSE, error=TRUE}
+stats = cbind(files, data.frame(matrix(unlist(fileLinesCountList), nrow=length(files), byrow=T)))
+htmlTable(stats, 
+          rnames = FALSE,
+          caption = 'English Corpus Documents from HC Corpora',
+          header = c('Document', 'Lines Count', 'Rough Words Count', 'Min Line Length', 'Max Line Length', 'Average Line Length'),
+          align = "lrrrrr",
+          col.rgroup = c("none", "#F7F7F7"),
+          css.cell = "padding-left: .5em; padding-right: .5em;")
+```
+
+## Data Exploration
+
+### Data Sampling
+
+```{r sample_rate, echo=FALSE, warning=FALSE, message=FALSE, error=TRUE, cache=TRUE}
+sampleRate = 1
+```
+
+Because of the very large sizes of the Corpus documents, the Corpus is explored with sampled data that is randomly extracted out of the Corpus files. For this report, we used a `r sampleRate`% sample rate. The R `rbinom` function is used for randomization.
+
+```{r sampled_files, echo=FALSE, warning=FALSE, message=FALSE, error=TRUE, cache=TRUE}
+corpusFilesPattern = paste0('^en_US(.)*sample_', sprintf('%.1f', sampleRate), '$')
+message(paste0("Loading the Corpus files with pattern '", corpusFilesPattern, "'..."))
+dirSamples = DirSource(directory = corpus_directory_en, pattern = corpusFilesPattern)
+samples = unlist(lapply(dirSamples$filelist, function(pathname) {unlist(strsplit(pathname, split = '/'))[2]}))
+sampleLinesCountList = lapply(dirSamples$filelist, function(filepath) { getFileStats(filepath)})
+```
+```{r display-sampled-files-metrics, echo=FALSE, warning=FALSE, message=FALSE, error=TRUE}
+sampleStats = cbind(samples, data.frame(matrix(unlist(sampleLinesCountList), nrow=length(sampleLinesCountList), byrow=T)))
+htmlTable(sampleStats, 
+          rnames = FALSE,
+          caption = paste0(sampleRate, '% Sampled English Corpus Documents from HC Corpora'),
+          header = c('Sample Document', 'Lines Count', 'Rough Words Count', 'Min Line Length', 'Max Line Length', 'Average Line Length'),
+          align = "lrrrrr",
+          col.rgroup = c("none", "#F7F7F7"),
+          css.cell = "padding-left: .5em; padding-right: .5em;")
+```
+
+### Corpus Loading
+
+We further explore the text documents in the Corpus with the help of the [tm](https://cran.r-project.org/web/packages/tm/index.html) and [RWeka](https://cran.r-project.org/web/packages/RWeka/index.html) Text Mining R packages. 
+
+```{r load-corpus, echo=FALSE, warning=FALSE, message=FALSE, error=TRUE, cache=TRUE}
+message('Loading the Corpus...')
+c1 = Corpus(dirSamples, readerControl=list(reader=readPlain)) # Language is assumed to be english
+message('Compute the Document-Term Matrix (DTM) for unigrams before Corpus cleansing...')    
+unigramTokenizer <- function(x) NGramTokenizer(x, Weka_control(min = 1, max = 1))
+dtm <- DocumentTermMatrix(c1, control = list(tokenize = unigramTokenizer))
+gramsFreq <- colSums(as.matrix(dtm))
+gramsTotalCount = sum(gramsFreq)
+```
+
+The raw (before pre-processing) Corpus is loaded from the samples files listed in Table `r tblNoLast()` with the tm `Corpus` function, and the **Document-Term Matrix** is calculated with the RWeka `NGramTokenizer` n-gram tokenizer. A Document-Term Matrix (DTM) is a matrix with the Corpus documents listed in the first column, and a subsequent column for each Corpus term. Each matrix cell at a given document row and term column is the number of times the term is used in the document.
+
+The unigram (i.e., single word) DTM contains `r format(gramsTotalCount, big.mark=",", scientific=FALSE)` words (Counting word repetitions).
+
+### Pre-Processing
+
+As typically done in text mining, the Corpus is "cleaned", or pre-processed, with the following actions using `tm` *transformers*:
+
+1. Strip whitespace;
+1. Convert all letters to lower case.
+1. Remove profanity using [this list](https://raw.githubusercontent.com/shutterstock/List-of-Dirty-Naughty-Obscene-and-Otherwise-Bad-Words/master/en), although, one could argue that keeping profanity might help in predicting the next word in a sentence.
+1. Remove punctuation.
+
+Note that we did **not** remove so-called "stop words" (e.g., to, the, a, an) or "stem" the words (e.g., 'walk', 'walked', and 'walking' all treated as 'walk') as we felt that doing so would make the training data less representative of everyday english.
+
+```{r clean-corpus, echo=FALSE, warning=FALSE, message=FALSE, error=TRUE, cache=TRUE}
+message('Corpus cleansing ...')
+message('Strip white spaces ...')
+c1 <- tm_map(c1, stripWhitespace)
+message('To lower case ...')
+c1 <- tm_map(c1, content_transformer(tolower))
+message('Remove profanity ...')
+enProfanityUrl = "https://raw.githubusercontent.com/shutterstock/List-of-Dirty-Naughty-Obscene-and-Otherwise-Bad-Words/master/en"
+enProfanityFile = paste0(corpus_directory_en, '\\', 'en_profanity.txt')
+if (!file.exists(enProfanityFile)) {
+    download.file(enProfanityUrl, destfile=enProfanityFile)
+}
+enProfanityWords <- read.table(enProfanityFile, header=FALSE, sep="\n", strip.white = TRUE)
+c1 <- tm_map(c1, removeWords, enProfanityWords[,1])
+message('Remove punctuation ...')
+c1 <- tm_map(c1, removePunctuation)
+message('Remove numbers ...')
+c1 <- tm_map(c1, removeNumbers)
+```
+```{r clean-dtm, echo=FALSE, warning=FALSE, message=FALSE, error=TRUE, cache=TRUE}
+message('Compute the Document-Term Matrix (DTM) for unigrams after Corpus cleansing...')    
+dtm2 <- DocumentTermMatrix(c1, control = list(tokenize = unigramTokenizer))
+message('Compute the unigrams probabilities...')
+unigramsFreq <- colSums(as.matrix(dtm2))
+unigramsTotalCount = sum(unigramsFreq)
+unigramsPercent <- (unigramsFreq/unigramsTotalCount)*100
+unigramsPercentSortDesc <- order(unigramsPercent, decreasing=TRUE)
+unigramsPercentSortedDat <- as.data.frame(unigramsPercent[unigramsPercentSortDesc])
+unigramsPercentSortedDat <- add_rownames(unigramsPercentSortedDat)
+names(unigramsPercentSortedDat) <- c('gram', 'prob')
+unigramsPercentSortedDat$rownumber <- as.integer(rownames(unigramsPercentSortedDat))
+unigramsCount = dim(unigramsPercentSortedDat)[[1]]
+unigramsCoverageDat <- data.frame(percent_grams_used = (unigramsPercentSortedDat$rownumber/unigramsCount)*100, corpus_coverage = cumsum(unigramsPercentSortedDat$prob))
+unigramsCoverageDat$ngram_type <- 'unigram'
+```
+
+Subsequent to the pre-processing/data cleansing, the 1-gram (i.e., single word) DTM contains `r format(unigramsTotalCount, big.mark=",", scientific=FALSE)` words.
+
+### N-Gram Analysis
+
+```{r parameters, echo=FALSE, warning=FALSE, message=FALSE, error=TRUE}
+rankSize = 25
+```
+
+### N-Gram Usage Frequency
+
+Using our `r sampleRate`% randomly sampled and pre-processed english Corpus, we identify the top `r rankSize` most frequently used terms for:
+
+1. Words (i.e., unigrams)
+1. bigrams
+1. trigrams
+1. 4-grams
+
+```{r unigrams-top, echo=FALSE, warning=FALSE, message=FALSE, error=TRUE}
+message(paste('Plot the top', rankSize, 'used unigrams...'))
+unigramsTopDat = head(unigramsPercentSortedDat, n = rankSize)
+unigramsPlot = ggplot(unigramsTopDat, aes(x = factor(gram, levels = unigramsTopDat$gram), y = prob)) + 
+    geom_bar(stat = "identity") + 
+    coord_flip() +
+    labs(title=paste0('Figure ', fig_num, ': Top ', rankSize, ' Used Unigrams'), 
+         x='Unigram (Word)', 
+         y=paste0('Percent Used in the ', sampleRate, '% Sampled English Corpus')) +
+    theme(plot.title = element_text(size=12, face="bold", margin = margin(10, 0, 10, 0)))
+fig_num = fig_num + 1
+```
+
+```{r bigrams-dtm, echo=FALSE, warning=FALSE, message=FALSE, error=TRUE, cache=TRUE}
+bigramCount = 2
+message(paste0('Compute the Document-Term Matrix (TDM) for ', bigramCount, '-grams...'))
+bigramTokenizer <- function(x) NGramTokenizer(x, Weka_control(min = bigramCount, max = bigramCount))
+bigramDtm <- DocumentTermMatrix(c1, control = list(tokenize = bigramTokenizer))
+message(paste0('Compute the ', bigramCount, '-grams probabilities...'))
+bigramsFreq <- colSums(as.matrix(bigramDtm))
+bigramsTotalCount = sum(bigramsFreq)
+bigramsPercent <- (bigramsFreq/bigramsTotalCount)*100
+bigramsPercentSortDesc <- order(bigramsPercent, decreasing=TRUE)
+bigramsPercentSortedDat <- as.data.frame(bigramsPercent[bigramsPercentSortDesc])
+bigramsPercentSortedDat <- add_rownames(bigramsPercentSortedDat)
+names(bigramsPercentSortedDat) <- c('gram', 'prob')
+bigramsPercentSortedDat$rownumber <- as.integer(rownames(bigramsPercentSortedDat))
+bigramsCount = dim(bigramsPercentSortedDat)[[1]]
+bigramsCoverageDat <- data.frame(percent_grams_used = (bigramsPercentSortedDat$rownumber/bigramsCount)*100, corpus_coverage = cumsum(bigramsPercentSortedDat$prob))
+bigramsCoverageDat$ngram_type <- 'bigram'
+```
+```{r bigrams-top, echo=FALSE, warning=FALSE, message=FALSE, error=TRUE}
+message(paste0('Plot the top ', rankSize, ' used ', bigramCount, '-grams...'))
+bigramsTopDat = head(bigramsPercentSortedDat, n = rankSize)
+bigramsPlot = ggplot(bigramsTopDat, aes(x = factor(gram, levels = bigramsTopDat$gram), y = prob)) + 
+    geom_bar(stat = "identity") + 
+    coord_flip() +
+    labs(title=paste0('Figure ', fig_num, ': Top ', rankSize, ' Used Bigrams'), 
+         x='Bigram', 
+         y=paste0('Percent Used in the ', sampleRate, '% Sampled English Corpus')) +
+    theme(plot.title = element_text(size=12, face="bold", margin = margin(10, 0, 10, 0)))
+fig_num = fig_num + 1
+```
+
+```{r trigrams-dtm, echo=FALSE, warning=FALSE, message=FALSE, error=TRUE, cache=TRUE}
+trigramCount = 3
+message(paste0('Compute the Document-Term Matrix (DTM) for ', trigramCount, '-grams...'))
+trigramTokenizer <- function(x) NGramTokenizer(x, Weka_control(min = trigramCount, max = trigramCount))
+trigramDtm <- DocumentTermMatrix(c1, control = list(tokenize = trigramTokenizer))
+message(paste0('Compute the ', trigramCount, '-grams probabilities...'))
+trigramsFreq <- colSums(as.matrix(trigramDtm))
+trigramsTotalCount = colSums(as.data.frame(trigramsFreq))
+trigramsPercent <- (trigramsFreq/trigramsTotalCount)*100
+trigramsPercentSortDesc <- order(trigramsPercent, decreasing=TRUE)
+trigramsPercentSortedDat <- as.data.frame(trigramsPercent[trigramsPercentSortDesc])
+trigramsPercentSortedDat <- add_rownames(trigramsPercentSortedDat)
+names(trigramsPercentSortedDat) <- c('gram', 'prob')
+trigramsPercentSortedDat$rownumber <- as.integer(rownames(trigramsPercentSortedDat))
+trigramsCount = dim(trigramsPercentSortedDat)[[1]]
+trigramsCoverageDat <- data.frame(percent_grams_used = (trigramsPercentSortedDat$rownumber/trigramsCount)*100, corpus_coverage = cumsum(trigramsPercentSortedDat$prob))
+trigramsCoverageDat$ngram_type <- 'trigram'
+```
+```{r trigrams-top, echo=FALSE, warning=FALSE, message=FALSE, error=TRUE}
+message(paste0('Plot the top ', rankSize, ' used ', trigramCount, '-grams...'))
+trigramsTopDat = head(trigramsPercentSortedDat, n = rankSize)
+trigramsPlot = ggplot(trigramsTopDat, aes(x = factor(gram, levels = trigramsTopDat$gram), y = prob)) + 
+    geom_bar(stat = "identity") + 
+    coord_flip() +
+    labs(title=paste0('Figure ', fig_num, ': Top ', rankSize, ' Used Trigrams'), 
+         x='Trigram', 
+         y=paste0('Percent Used in the ', sampleRate, '% Sampled English Corpus')) +
+    theme(plot.title = element_text(size=12, face="bold", margin = margin(10, 0, 10, 0)))
+fig_num = fig_num + 1
+```
+```{r fourgrams-dtm, echo=FALSE, warning=FALSE, message=FALSE, error=TRUE, cache=TRUE}
+fourgramCount = 4
+message(paste0('Compute the Document-Term Matrix (DTM) for ', fourgramCount, '-grams...'))
+fourgramTokenizer <- function(x) NGramTokenizer(x, Weka_control(min = fourgramCount, max = fourgramCount))
+fourgramDtm <- DocumentTermMatrix(c1, control = list(tokenize = fourgramTokenizer))
+message(paste0('Compute the ', fourgramCount, '-grams probabilities...'))
+fourgramsFreq <- colSums(as.matrix(fourgramDtm))
+fourgramsTotalCount = colSums(as.data.frame(fourgramsFreq))
+fourgramsPercent <- (fourgramsFreq/fourgramsTotalCount)*100
+fourgramsPercentSortDesc <- order(fourgramsPercent, decreasing=TRUE)
+fourgramsPercentSortedDat <- as.data.frame(fourgramsPercent[fourgramsPercentSortDesc])
+fourgramsPercentSortedDat <- add_rownames(fourgramsPercentSortedDat)
+names(fourgramsPercentSortedDat) <- c('gram', 'prob')
+fourgramsPercentSortedDat$rownumber <- as.integer(rownames(fourgramsPercentSortedDat))
+fourgramsCount = dim(fourgramsPercentSortedDat)[[1]]
+fourgramsCoverageDat <- data.frame(percent_grams_used = (fourgramsPercentSortedDat$rownumber/fourgramsCount)*100, corpus_coverage = cumsum(fourgramsPercentSortedDat$prob))
+fourgramsCoverageDat$ngram_type <- '4-gram'
+```
+```{r fourgrams-top, echo=FALSE, warning=FALSE, message=FALSE, error=TRUE}
+message(paste0('Plot the top ', rankSize, ' used ', fourgramCount, '-grams...'))
+fourgramsTopDat = head(fourgramsPercentSortedDat, n = rankSize)
+fourgramsPlot = ggplot(fourgramsTopDat, aes(x = factor(gram, levels = fourgramsTopDat$gram), y = prob)) + 
+    geom_bar(stat = "identity") + 
+    coord_flip() +
+    labs(title=paste0('Figure ', fig_num, ': Top ', rankSize, ' Used 4-grams'), 
+         x='4-gram', 
+         y=paste0('Percent Used in the ', sampleRate, '% Sampled English Corpus')) +
+    theme(plot.title = element_text(size=12, face="bold", margin = margin(10, 0, 10, 0)))
+fig_num = fig_num + 1
+```
+
+```{r plots-layout, echo=FALSE, warning=FALSE, message=FALSE, error=TRUE}
+unigramsPlot
+bigramsPlot
+trigramsPlot
+fourgramsPlot
+```
+
+### Corpus Coverage by Sorted N-Grams Population
+
+Figure `r fig_num` below plots for each N-gram type (uni, bi, tri, and four) the percent coverage of the Corpus by percent of the sorted N-grams used.
+
+```{r coverage-plot, echo=FALSE, warning=FALSE, message=FALSE, error=TRUE}
+gramsCoverageDat <- rbind(unigramsCoverageDat, bigramsCoverageDat, trigramsCoverageDat, fourgramsCoverageDat)
+gramsCoverageDat$ngram_type = as.factor(gramsCoverageDat$ngram_type)
+gramsCoverageDat$ngram_type <- factor(gramsCoverageDat$ngram_type, levels=c("unigram", "bigram", "trigram", "4-gram"))
+ggplot(gramsCoverageDat, aes(x = percent_grams_used, 
+                             y = corpus_coverage, 
+                             group = ngram_type)) + 
+    geom_line(aes(colour = ngram_type)) +
+    labs(title=paste0('Figure ', fig_num, ': Corpus Coverage by Percent of Grams Used'), 
+         x='Pecent of N-Grams Used', 
+         y='Corpus Coverage Percent', 
+         col="N-gram Type") +
+    theme(plot.title = element_text(size=12, face="bold", margin = margin(10, 0, 10, 0)))
+fig_num = fig_num + 1
+```
+
+Figure `r fig_num - 1` shows that as 'N' in the N-grams increases, the top sorted N-grams cover a decreasing percentage of the Corpus. This is fairly intuitive: Indeed, unigrams such as "the"", "and"", "for"" (See Figure 1) with a probability of occurrences in the single digit are used extensively in written english, while 4-grams such as "the rest of the"" or "for the first time"" (See Figure 4), with a probability of occurences in the sub 0.01% are used much less often. Such observation brings up the point that a sentence-next-word predictor is expected to have better results as it uses an increasing number of the previously typed words to make its prediction of the next word in the sentence.
+
+## Predictive Model Development Methodology
+
+### Overall Development Plan
+
+Based on the n-grams analysis performed thus far, and to get our "feet wet", we will be considering first the design of a simple predictor of the next-word-in-a-sentence based on a collection of probability-sorted n-grams lookup tables. The considered algorithm is a variation, or simplified version, of the [Katz's Back-Off Model](https://en.wikipedia.org/wiki/Katz%27s_back-off_model) using n-grams occurrences counts instead of conditional probabilities.
+
+Second, we will consider implementing the full version of the Katz's Back-Off Model with conditional probabilities.
+
+Next, based on continued research of the domain of predictive text analysis, alternate algorithms may be identified, implemented, and tested.
+
+Additional consideration will be made for the following aspects of the project:
+
+1. In a traditional Machine Learning design and development methodology, the HC Corpora data will be split between training, test, and validation data sets.
+1. Different algorithms' RAM and CPU profiles will be examined.
+1. The targeted run-time environment characteristics will be identified, for example: Mobile vs. computer device, low vs. high RAM.
+1. The Shinyapp application characteristics will be taken into account, for example: Memory model, storage (for the ngrams model) size, and User Interface response time.
+
+### Katz's Back-Off Model Variation
+
+Our variation of the Katz's Back-Off Model would go as follows:
+
+Given an N-gram model composed of a probability-sorted i-grams table for i= 2, 3, ..., N. In the n-grams table, the probability of a gram is defined as the number of occurrences of the gram in the training dataset divided by the total number of grams in the training dataset. This is also the probability that is plotted as "Percent Used" in Figures 1 through 4 earlier in the document.
+
+As the end-user has typed a sentence with K words (Also referred as tokens), the algorithm goes as follows:
+
+* Loop for i = min(N-1, K) to 1  
+    + From the end of the sentence, extract the last i tokens;
+    + Lookup the probability-sorted (i+1)-gram table for matches;
+    + If there is or more matches, suggest the matches to the end-user, and exit the loop;
+    + Else, "back-off", and repeat the above steps for i-1.
+    
+To illustrate the above algorithm, an 4-gram model is built by row-binding the bigrams, trigrams, and 4-grams data frames that were built in the N-Gram Analysis section earlier in the document. The top-5 bigrams, trigrams, and 4-grams are shown below for illustration (Same as in Figure 2, 3, and 4 respectively):
+
+```{r 4-gram-model-construction, echo=FALSE, warning=FALSE, message=FALSE, error=TRUE}
+# Construct the N-gram data frame
+bigramsPercentSortedDat$ngram_count <- 2
+trigramsPercentSortedDat$ngram_count <- 3
+fourgramsPercentSortedDat$ngram_count <- 4
+gramsDat <- rbind(bigramsPercentSortedDat, trigramsPercentSortedDat, fourgramsPercentSortedDat)
+# Show the content of the data frame:
+filter(gramsDat, ngram_count == 2) %>% head(5)
+filter(gramsDat, ngram_count == 3) %>% head(5)
+filter(gramsDat, ngram_count == 4) %>% head(5)
+
+# Function to extract the last N words (tokens) of a sequence of words, as a single string.
+spacesRegex = '\\s+'
+getLastNTokens <- function(sentence, tokens_count) {
+    tokens = unlist(strsplit(sentence, spacesRegex))
+    ntokens = tokens[max(length(tokens)-(tokens_count-1),1):length(tokens)]
+    concat(ntokens, collapse = " ")
+}
+
+# Function to lookup matches in the N-gram data frame.
+findMatchingGrams <- function(sentence, n) {
+    k <- length(unlist(strsplit(sentence, spacesRegex)))    
+    matchFound = FALSE
+    matches = NULL
+    for (i in min(n-1,k):1) {
+        #print(i)
+        ngram = getLastNTokens(sentence, i)
+        print(paste0('System looks up ', i+1, "-gram table for gram '", ngram, "'"))
+        matches <- filter(gramsDat, grepl(paste0('^', ngram), gram) & ngram_count == i+1) %>% arrange(desc(prob))        
+        if (dim(matches)[1] > 0) {
+            break
+        } else {
+            print('System did not find any match')
+        }       
+    }
+    matches
+}
+```
+The 4-gram model prediction in action is illustrated below using a sequence whose last word is part of a known bigram in the model:
+
+```{r 4-gram-model-prediction-example, echo=FALSE, warning=FALSE, message=FALSE, error=TRUE}
+# Exam ple of the back-off action using a sequence whose last word is part of a known bigram in the Corpus:
+bigramsCount = dim(bigramsPercentSortedDat)[1]
+knownBigram = as.matrix(bigramsPercentSortedDat)[bigramsCount/2][1]
+knownBigramFirstGram = unlist(strsplit(knownBigram, spacesRegex))[1]
+head(findMatchingGrams(paste('XXX YYYY', knownBigramFirstGram), 4)) # 'xxx YYY <knownBigramFirstGram>' is assumed to not exist in the n-gram model.
+```
+
+### Shinyapp Application
+
+At this time, we are imagining a Shinyapp application with the following user interface components and behavior:
+
+1. A reactive input text box that allows the end-user to type in a sentence;
+2. A reactive set of suggested-words radio buttons, that are populated with the predicted next words.
+
+Thanks to the reactive input text box, the server-side R code is able to process each key press. Upon detecting the typing of the space character, the server-side R code extracts the last N grams (N is an application configuration parameter) out of the sentence typed thus far, runs the prediction algorithm, and populates the suggested-words radio buttons with the top-5 matches, if any.
+
+The user may then choose to select a suggested word by clicking the associated radio button, which causes the selected word to be added to the sentence in the input text box.
+
+The following R code output simulates the described Shinyapp interface with five successive predictions. The simulation starts with the sentence typed thus far being 'the economy is':
+
+```{r shinyapp-simulation, echo=FALSE, warning=FALSE, message=FALSE, error=TRUE}
+# Simulation: Run the algorithm up to 5 loops, starting with:
+sentence = 'the economy is'
+demoLoopCount = 5
+ngramCountModel = 4
+for (i in 1:demoLoopCount) {
+    matches = findMatchingGrams(sentence, ngramCountModel)
+    if (dim(matches)[1] > 0) {
+        print("System found the following top-5 matches")            
+        print(head(matches, n=5))  
+        
+        sentenceTokens = unlist(strsplit(sentence, spacesRegex))        
+        sentenceTokensCount = length(sentenceTokens)
+        ntokens = sentenceTokens[max(sentenceTokensCount-(sentenceTokensCount-2),1):sentenceTokensCount]
+        
+        # Simulate the end-user choosing the top match in the suggested list of matches:
+        topMatch = as.matrix(matches)[1][1]
+        topMatchTokens = unlist(strsplit(topMatch, spacesRegex))
+        topMatchTokensCount = length(topMatchTokens)
+        print(paste0("End-user selects '", topMatchTokens[topMatchTokensCount], "'"))
+    
+        topMatchTokens = unlist(strsplit(topMatch, spacesRegex))
+        sentence = concat(ntokens, topMatchTokens[length(topMatchTokens)], collapse = " ")
+        print(paste0("Next sentence: '", sentence, "'"))
+    } else {        
+        break
+    }    
+}
+```
+
+## Appendix
+
+For the interested reader, this appendix provides all the R code used in the report.
+
+### Corpus Files Loading
+
+```{r corpus-files-loading-and-stats, eval=FALSE}
+# Change to your local directory
+corpus_directory_en = 'C:\\training\\coursera\\datascience\\Capstone\\dataset\\final\\en_US'
+dirSource = DirSource(directory = corpus_directory_en, pattern = '^en_US(.)*txt$')
+files = unlist(lapply(dirSource$filelist, function(pathname) {unlist(strsplit(pathname, split = '/'))[2]}))
+getFileStats <- function(filepath) {    
+    message(paste('Processing', filepath))
+    cnx = file(filepath, open = "r")
+    totalLinesCount = 0
+    lineLengths = c()    
+    totalWordsCount = 0
+    linesChunkSize = 100000
+    while (TRUE) {
+        lines = readLines(cnx, n = linesChunkSize, encoding = "UTF-8")  
+        linesCount = length(lines)
+        totalLinesCount = totalLinesCount + linesCount
+        if (linesCount == 0 ) {            
+            break # print("Reached EOF")
+        }        
+        lineLengths = c(lineLengths, unlist(lapply(lines, function(line) { nchar(line)})))    
+        totalWordsCount = totalWordsCount + sum(unlist(lapply(lines, function(line) { s = strsplit(line, split = '(\\s+)|[.,;:/!?]')[[1]]; s = s[s!=""]; length(s)})))        
+    }
+    minLineLength = min(lineLengths)
+    maxLineLength = max(lineLengths)
+    meanLineLength = round(mean(lineLengths))
+    message(paste(filepath, "- lines count     :", totalLinesCount))
+    message(paste(filepath, "- words count     :", totalWordsCount))
+    message(paste(filepath, "- min line length :", minLineLength))    
+    message(paste(filepath, "- max line length :", maxLineLength))
+    message(paste(filepath, "- mean line length:", meanLineLength))
+    close(cnx)
+    # Returns the file's stats:
+    c(
+        format(totalLinesCount, big.mark=",", scientific=FALSE),
+        format(totalWordsCount, big.mark=",", scientific=FALSE),
+        format(minLineLength, big.mark=",", scientific=FALSE),
+        format(maxLineLength, big.mark=",", scientific=FALSE),
+        format(meanLineLength, big.mark=",", scientific=FALSE)
+    )
+}
+
+fileLinesCountList = lapply(dirSource$filelist, function(filepath) { getFileStats(filepath)})
+stats = cbind(files, data.frame(matrix(unlist(fileLinesCountList), nrow=length(files), byrow=T)))
+htmlTable(stats, 
+          rnames = FALSE,
+          caption = 'English Corpus Documents from HC Corpora',
+          header = c('Document', 'Lines Count', 'Rough Words Count', 'Min Line Length', 'Max Line Length', 'Average Line Length'),
+          align = "lrrrrr",
+          col.rgroup = c("none", "#F7F7F7"),
+          css.cell = "padding-left: .5em; padding-right: .5em;")
+```
+
+### Files Sampling
+
+```{r corpus-sampled-files-loading-and-stats, eval=FALSE}
+sampleCorpusFile <- function(directory, file_name, sample_rate) {
+    execTime <- system.time({
+        set.seed(10)    
+        filePath = paste0(directory, '\\', file_name)
+        cnx = file(filePath, open = "r")    
+        samplePath = paste0(filePath, '.sample_', sprintf('%.1f', sample_rate * 100))
+        message(paste('Creating sample', samplePath))
+        sampleFile = file(samplePath, open = "wt")
+        linesChunkSize = 100000
+        totalLinesCount = 0
+        sampleSize = 0
+        while (TRUE) {
+            lines = readLines(cnx, n = linesChunkSize)  
+            linesCount = length(lines)
+            totalLinesCount = totalLinesCount + linesCount
+            if (linesCount == 0 ) {
+                message("Reached EOF")
+                break
+            }    
+            message(paste(linesCount, 'lines read'))
+            keepLines <- rbinom(n = linesCount, size = 1, prob = sample_rate)
+            sampleLines = unlist(lapply(seq_along(keepLines), function(i) { if (keepLines[i] == 1) lines[[i]] }))
+            sampleCount = length(sampleLines)
+            message(paste(sampleCount, 'sampled lines'))
+            sampleSize = sampleSize + sampleCount
+            writeLines(sampleLines, sampleFile)    
+        }
+    })
+    message(paste(sampleSize, 'lines sampled out of', totalLinesCount, 'in', round(execTime["elapsed"], 2), "secs"))
+    close(sampleFile)
+    close(cnx)
+    TRUE
+}
+
+sampleRate = 1
+corpusFilesPattern = paste0('^en_US(.)*sample_', sampleRate, '$')
+message(paste0("Loading the Corpus files with pattern '", corpusFilesPattern, "'..."))
+dirSamples = DirSource(directory = corpus_directory_en, pattern = corpusFilesPattern)
+samples = unlist(lapply(dirSamples$filelist, function(pathname) {unlist(strsplit(pathname, split = '/'))[2]}))
+sampleLinesCountList = lapply(dirSamples$filelist, function(filepath) { getFileStats(filepath)})
+sampleStats = cbind(samples, data.frame(matrix(unlist(sampleLinesCountList), nrow=length(sampleLinesCountList), byrow=T)))
+htmlTable(sampleStats, 
+          rnames = FALSE,
+          caption = paste0(sampleRate, '% Sampled English Corpus Documents from HC Corpora'),
+          header = c('Sample Document', 'Lines Count', 'Rough Words Count', 'Min Line Length', 'Max Line Length', 'Average Line Length'),
+          align = "lrrrrr",
+          col.rgroup = c("none", "#F7F7F7"),
+          css.cell = "padding-left: .5em; padding-right: .5em;")
+```
+
+### Corpus Loading & Cleaning
+
+```{r corpus-load-and-clean, eval=FALSE}
+message('Loading the Corpus...')
+c1 = Corpus(dirSamples, readerControl=list(reader=readPlain)) # Language is assumed to be english
+message('Compute the Document-Term Matrix (DTM) for unigrams before Corpus cleansing...')    
+unigramTokenizer <- function(x) NGramTokenizer(x, Weka_control(min = 1, max = 1))
+dtm <- DocumentTermMatrix(c1, control = list(tokenize = unigramTokenizer))
+gramsFreq <- colSums(as.matrix(dtm))
+gramsTotalCount = sum(gramsFreq)
+message('Corpus cleansing ...')
+message('Strip white spaces ...')
+c1 <- tm_map(c1, stripWhitespace)
+message('To lower case ...')
+c1 <- tm_map(c1, content_transformer(tolower))
+message('Remove profanity ...')
+enProfanityUrl = "https://raw.githubusercontent.com/shutterstock/List-of-Dirty-Naughty-Obscene-and-Otherwise-Bad-Words/master/en"
+enProfanityFile = paste0(corpus_directory_en, '\\', 'en_profanity.txt')
+if (!file.exists(enProfanityFile)) {
+    download.file(enProfanityUrl, destfile=enProfanityFile)
+}
+enProfanityWords <- read.table(enProfanityFile, header=FALSE, sep="\n", strip.white = TRUE)
+c1 <- tm_map(c1, removeWords, enProfanityWords[,1])
+message('Remove punctuation ...')
+c1 <- tm_map(c1, removePunctuation)
+message('Remove numbers ...')
+c1 <- tm_map(c1, removeNumbers)
+```
+
+### N-Gram Analysis
+
+```{r n-grams-analysis, eval=FALSE}
+fig_num = 1
+rankSize = 25
+message('Compute the Document-Term Matrix (DTM) for unigrams after Corpus cleansing...')    
+dtm2 <- DocumentTermMatrix(c1, control = list(tokenize = unigramTokenizer))
+message('Compute the unigrams probabilities...')
+unigramsFreq <- colSums(as.matrix(dtm2))
+unigramsTotalCount = sum(unigramsFreq)
+unigramsPercent <- (unigramsFreq/unigramsTotalCount)*100
+unigramsPercentSortDesc <- order(unigramsPercent, decreasing=TRUE)
+unigramsPercentSortedDat <- as.data.frame(unigramsPercent[unigramsPercentSortDesc])
+unigramsPercentSortedDat <- add_rownames(unigramsPercentSortedDat)
+names(unigramsPercentSortedDat) <- c('gram', 'prob')
+unigramsPercentSortedDat$rownumber <- as.integer(rownames(unigramsPercentSortedDat))
+unigramsCount = dim(unigramsPercentSortedDat)[[1]]
+unigramsCoverageDat <- data.frame(percent_grams_used = (unigramsPercentSortedDat$rownumber/unigramsCount)*100, corpus_coverage = cumsum(unigramsPercentSortedDat$prob))
+unigramsCoverageDat$ngram_type <- 'unigram'
+message(paste('Plot the top', rankSize, 'used unigrams...'))
+unigramsTopDat = head(unigramsPercentSortedDat, n = rankSize)
+unigramsPlot = ggplot(unigramsTopDat, aes(x = factor(gram, levels = unigramsTopDat$gram), y = prob)) + 
+    geom_bar(stat = "identity") + 
+    coord_flip() +
+    labs(title=paste0('Figure ', fig_num, ': Top ', rankSize, ' Used Unigrams'), 
+         x='Unigram (Word)', 
+         y=paste0('Percent Used in the ', sampleRate, '% Sampled English Corpus')) +
+    theme(plot.title = element_text(size=12, face="bold", margin = margin(10, 0, 10, 0)))
+fig_num = fig_num + 1
+
+bigramCount = 2
+message(paste0('Compute the Document-Term Matrix (TDM) for ', bigramCount, '-grams...'))
+bigramTokenizer <- function(x) NGramTokenizer(x, Weka_control(min = bigramCount, max = bigramCount))
+bigramDtm <- DocumentTermMatrix(c1, control = list(tokenize = bigramTokenizer))
+message(paste0('Compute the ', bigramCount, '-grams probabilities...'))
+bigramsFreq <- colSums(as.matrix(bigramDtm))
+bigramsTotalCount = sum(bigramsFreq)
+bigramsPercent <- (bigramsFreq/bigramsTotalCount)*100
+bigramsPercentSortDesc <- order(bigramsPercent, decreasing=TRUE)
+bigramsPercentSortedDat <- as.data.frame(bigramsPercent[bigramsPercentSortDesc])
+bigramsPercentSortedDat <- add_rownames(bigramsPercentSortedDat)
+names(bigramsPercentSortedDat) <- c('gram', 'prob')
+bigramsPercentSortedDat$rownumber <- as.integer(rownames(bigramsPercentSortedDat))
+bigramsCount = dim(bigramsPercentSortedDat)[[1]]
+bigramsCoverageDat <- data.frame(percent_grams_used = (bigramsPercentSortedDat$rownumber/bigramsCount)*100, corpus_coverage = cumsum(bigramsPercentSortedDat$prob))
+bigramsCoverageDat$ngram_type <- 'bigram'
+message(paste0('Plot the top ', rankSize, ' used ', bigramCount, '-grams...'))
+bigramsTopDat = head(bigramsPercentSortedDat, n = rankSize)
+bigramsPlot = ggplot(bigramsTopDat, aes(x = factor(gram, levels = bigramsTopDat$gram), y = prob)) + 
+    geom_bar(stat = "identity") + 
+    coord_flip() +
+    labs(title=paste0('Figure ', fig_num, ': Top ', rankSize, ' Used Bigrams'), 
+         x='Bigram', 
+         y=paste0('Percent Used in the ', sampleRate, '% Sampled English Corpus')) +
+    theme(plot.title = element_text(size=12, face="bold", margin = margin(10, 0, 10, 0)))
+fig_num = fig_num + 1
+
+trigramCount = 3
+message(paste0('Compute the Document-Term Matrix (DTM) for ', trigramCount, '-grams...'))
+trigramTokenizer <- function(x) NGramTokenizer(x, Weka_control(min = trigramCount, max = trigramCount))
+trigramDtm <- DocumentTermMatrix(c1, control = list(tokenize = trigramTokenizer))
+message(paste0('Compute the ', trigramCount, '-grams probabilities...'))
+trigramsFreq <- colSums(as.matrix(trigramDtm))
+trigramsTotalCount = colSums(as.data.frame(trigramsFreq))
+trigramsPercent <- (trigramsFreq/trigramsTotalCount)*100
+trigramsPercentSortDesc <- order(trigramsPercent, decreasing=TRUE)
+trigramsPercentSortedDat <- as.data.frame(trigramsPercent[trigramsPercentSortDesc])
+trigramsPercentSortedDat <- add_rownames(trigramsPercentSortedDat)
+names(trigramsPercentSortedDat) <- c('gram', 'prob')
+trigramsPercentSortedDat$rownumber <- as.integer(rownames(trigramsPercentSortedDat))
+trigramsCount = dim(trigramsPercentSortedDat)[[1]]
+trigramsCoverageDat <- data.frame(percent_grams_used = (trigramsPercentSortedDat$rownumber/trigramsCount)*100, corpus_coverage = cumsum(trigramsPercentSortedDat$prob))
+trigramsCoverageDat$ngram_type <- 'trigram'
+message(paste0('Plot the top ', rankSize, ' used ', trigramCount, '-grams...'))
+trigramsTopDat = head(trigramsPercentSortedDat, n = rankSize)
+trigramsPlot = ggplot(trigramsTopDat, aes(x = factor(gram, levels = trigramsTopDat$gram), y = prob)) + 
+    geom_bar(stat = "identity") + 
+    coord_flip() +
+    labs(title=paste0('Figure ', fig_num, ': Top ', rankSize, ' Used Trigrams'), 
+         x='Trigram', 
+         y=paste0('Percent Used in the ', sampleRate, '% Sampled English Corpus')) +
+    theme(plot.title = element_text(size=12, face="bold", margin = margin(10, 0, 10, 0)))
+fig_num = fig_num + 1
+
+fourgramCount = 4
+message(paste0('Compute the Document-Term Matrix (DTM) for ', fourgramCount, '-grams...'))
+fourgramTokenizer <- function(x) NGramTokenizer(x, Weka_control(min = fourgramCount, max = fourgramCount))
+fourgramDtm <- DocumentTermMatrix(c1, control = list(tokenize = fourgramTokenizer))
+message(paste0('Compute the ', fourgramCount, '-grams probabilities...'))
+fourgramsFreq <- colSums(as.matrix(fourgramDtm))
+fourgramsTotalCount = colSums(as.data.frame(fourgramsFreq))
+fourgramsPercent <- (fourgramsFreq/fourgramsTotalCount)*100
+fourgramsPercentSortDesc <- order(fourgramsPercent, decreasing=TRUE)
+fourgramsPercentSortedDat <- as.data.frame(fourgramsPercent[fourgramsPercentSortDesc])
+fourgramsPercentSortedDat <- add_rownames(fourgramsPercentSortedDat)
+names(fourgramsPercentSortedDat) <- c('gram', 'prob')
+fourgramsPercentSortedDat$rownumber <- as.integer(rownames(fourgramsPercentSortedDat))
+fourgramsCount = dim(fourgramsPercentSortedDat)[[1]]
+fourgramsCoverageDat <- data.frame(percent_grams_used = (fourgramsPercentSortedDat$rownumber/fourgramsCount)*100, corpus_coverage = cumsum(fourgramsPercentSortedDat$prob))
+fourgramsCoverageDat$ngram_type <- '4-gram'
+message(paste0('Plot the top ', rankSize, ' used ', fourgramCount, '-grams...'))
+fourgramsTopDat = head(fourgramsPercentSortedDat, n = rankSize)
+fourgramsPlot = ggplot(fourgramsTopDat, aes(x = factor(gram, levels = fourgramsTopDat$gram), y = prob)) + 
+    geom_bar(stat = "identity") + 
+    coord_flip() +
+    labs(title=paste0('Figure ', fig_num, ': Top ', rankSize, ' Used 4-grams'), 
+         x='4-gram', 
+         y=paste0('Percent Used in the ', sampleRate, '% Sampled English Corpus')) +
+    theme(plot.title = element_text(size=12, face="bold", margin = margin(10, 0, 10, 0)))
+fig_num = fig_num + 1
+
+unigramsPlot
+bigramsPlot
+trigramsPlot
+fourgramsPlot
+
+gramsCoverageDat <- rbind(unigramsCoverageDat, bigramsCoverageDat, trigramsCoverageDat, fourgramsCoverageDat)
+gramsCoverageDat$ngram_type = as.factor(gramsCoverageDat$ngram_type)
+gramsCoverageDat$ngram_type <- factor(gramsCoverageDat$ngram_type, levels=c("unigram", "bigram", "trigram", "4-gram"))
+ggplot(gramsCoverageDat, aes(x = percent_grams_used, 
+                             y = corpus_coverage, 
+                             group = ngram_type)) + 
+    geom_line(aes(colour = ngram_type)) +
+    labs(title=paste0('Figure ', fig_num, ': Corpus Coverage by Percent of Grams Used'), 
+         x='Pecent of N-Grams Used', 
+         y='Corpus Coverage Percent', 
+         col="N-gram Type") +
+    theme(plot.title = element_text(size=12, face="bold", margin = margin(10, 0, 10, 0)))
+fig_num = fig_num + 1
+```
+
+### Katz's Back-Off Model Variation
+
+```{r katz-backoff-model, eval = FALSE}
+# Construct the N-gram data frame
+bigramsPercentSortedDat$ngram_count <- 2
+trigramsPercentSortedDat$ngram_count <- 3
+fourgramsPercentSortedDat$ngram_count <- 4
+gramsDat <- rbind(bigramsPercentSortedDat, trigramsPercentSortedDat, fourgramsPercentSortedDat)
+# Show the content of the data frame:
+filter(gramsDat, ngram_count == 2) %>% head(5)
+filter(gramsDat, ngram_count == 3) %>% head(5)
+filter(gramsDat, ngram_count == 4) %>% head(5)
+
+# Function to extract the last N words (tokens) of a sequence of words, as a single string.
+spacesRegex = '\\s+'
+getLastNTokens <- function(sentence, tokens_count) {
+    tokens = unlist(strsplit(sentence, spacesRegex))
+    ntokens = tokens[max(length(tokens)-(tokens_count-1),1):length(tokens)]
+    concat(ntokens, collapse = " ")
+}
+
+# Function to lookup matches in the N-gram data frame.
+findMatchingGrams <- function(sentence, n) {
+    k <- length(unlist(strsplit(sentence, spacesRegex)))    
+    matchFound = FALSE
+    matches = NULL
+    for (i in min(n-1,k):1) {
+        ngram = getLastNTokens(sentence, i)
+        print(paste0('System looks up ', i+1, "-gram table for gram '", ngram, "'"))
+        matches <- filter(gramsDat, grepl(paste0('^', ngram), gram) & ngram_count == i+1) %>% arrange(desc(prob))        
+        if (dim(matches)[1] > 0) {
+            break
+        } else {
+            print('System did not find any match')
+        }       
+    }
+    matches
+}
+
+# Exam ple of the back-off action using a sequence whose last word is part of a known bigram in the Corpus:
+bigramsCount = dim(bigramsPercentSortedDat)[1]
+knownBigram = as.matrix(bigramsPercentSortedDat)[bigramsCount/2][1]
+knownBigramFirstGram = unlist(strsplit(knownBigram, spacesRegex))[1]
+head(findMatchingGrams(paste('XXX YYYY', knownBigramFirstGram), 4)) # 'xxx YYY <knownBigramFirstGram>' is assumed to not exist in the n-gram model.
+```
+
+### Shinyapp Simulation
+
+```{r shinyapp-simulation-code, eval = FALSE}
+# Simulation: Run the algorithm up to 5 loops, starting with:
+sentence = 'the economy is'
+demoLoopCount = 5
+ngramCountModel = 4
+for (i in 1:demoLoopCount) {
+    matches = findMatchingGrams(sentence, ngramCountModel)
+    if (dim(matches)[1] > 0) {
+        print("System found the following top-5 matches")            
+        print(head(matches, n=5))  
+        
+        sentenceTokens = unlist(strsplit(sentence, spacesRegex))        
+        sentenceTokensCount = length(sentenceTokens)
+        ntokens = sentenceTokens[max(sentenceTokensCount-(sentenceTokensCount-2),1):sentenceTokensCount]
+        
+        # Simulate the end-user choosing the top match in the suggested list of matches:
+        topMatch = as.matrix(matches)[1][1]
+        topMatchTokens = unlist(strsplit(topMatch, spacesRegex))
+        topMatchTokensCount = length(topMatchTokens)
+        print(paste0("End-user selects '", topMatchTokens[topMatchTokensCount], "'"))
+    
+        topMatchTokens = unlist(strsplit(topMatch, spacesRegex))
+        sentence = concat(ntokens, topMatchTokens[length(topMatchTokens)], collapse = " ")
+        print(paste0("Next sentence: '", sentence, "'"))
+    } else {        
+        break
+    }    
+}
+```
