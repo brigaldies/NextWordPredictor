@@ -15,19 +15,21 @@
 # Example usage:
 # sampleCorpusFile('c:\coursera\datascience\capstone\corpus, 'en_US.twitter.txt', 0.1)
 # -----------------------------------------------------------------------------
+require(stringi)
 sampleCorpusFile <- function(directory, file_name, sample_rate) {
     execTime <- system.time({
         set.seed(10)    
         filePath = paste0(directory, '\\', file_name)
+        message(paste('Sampling', filePath, 'with rate', sample_rate))        
         cnx = file(filePath, open = "r")    
         samplePath = paste0(filePath, '.sample_', sprintf('%.1f', sample_rate * 100))
         message(paste('Creating sample', samplePath))
-        sampleFile = file(samplePath, open = "wt")
+        sampleFile = file(samplePath, open = "wt", encoding = "UTF-8")        
         linesChunkSize = 100000
         totalLinesCount = 0
         sampleSize = 0
         while (TRUE) {
-            lines = readLines(cnx, n = linesChunkSize, encoding = 'UTF-8')  
+            lines = readLines(cnx, n = linesChunkSize, encoding = 'UTF-8')              
             linesCount = length(lines)
             totalLinesCount = totalLinesCount + linesCount
             if (linesCount == 0 ) {
@@ -40,7 +42,14 @@ sampleCorpusFile <- function(directory, file_name, sample_rate) {
             sampleCount = length(sampleLines)
             message(paste(sampleCount, 'sampled lines'))
             sampleSize = sampleSize + sampleCount
-            writeLines(sampleLines, sampleFile)    
+            
+            # Convert on-ASCII characters
+            sampleLines <- stringi::stri_trans_general(sampleLines, "latin-ascii")
+            
+            # Write the sampled lines to the sample file
+            if (sampleCount > 0) {
+                writeLines(sampleLines, sampleFile)    
+            }            
         }
     })
     message(paste(sampleSize, 'lines sampled out of', totalLinesCount, 'in', round(execTime["elapsed"], 2), "secs"))
@@ -67,7 +76,7 @@ sampleCorpusFile <- function(directory, file_name, sample_rate) {
 # Example usage:
 # partitionCorpusFile('c:\coursera\datascience\capstone\corpus, 'en_US.twitter.txt', 0.1)
 # -----------------------------------------------------------------------------
-sampleCorpusFile <- function(directory, file_name, sample_rate) {
+partitionCorpusFile <- function(directory, file_name, sample_rate) {
     execTime <- system.time({
         set.seed(10)    
         filePath = paste0(directory, '\\', file_name)
