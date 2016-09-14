@@ -24,3 +24,5 @@ sessionInfo()
 g_corpus_directory_en = 'C:\\training\\coursera\\datascience\\Capstone\\dataset\\final\\en_US'
 # Text processing and ngram building package (TM is used in conjunction with RWeka)
 g_ngram_package = 'TM'
+
+options(java.parameters = "-Xmx2g")

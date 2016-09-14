@@ -44,7 +44,7 @@ buildNGramTM <- function(corpus, n) {
     ngramLogPercentSortedDat
 }
 
-buildNGramTM2 <- function(corpus, n, lowerOrderNGram, max_loop) {
+buildNGramTM2 <- function(corpus, dtm, n, lowerOrderNGram, max_loop) {
     require(RWeka)
     ngramName = paste0(n, '-gram')
     ngramLowerOrderName = paste0(n-1, '-gram')
@@ -59,15 +59,18 @@ buildNGramTM2 <- function(corpus, n, lowerOrderNGram, max_loop) {
     }
     
     # Get the tokenizer
-    message(paste('Get a', ngramName, 'tokenizer...'))
-    tokenizer = function(x) NGramTokenizer(x, Weka_control(min = n, max = n))
+    ngramsDtm = dtm
+    if (is.na(dtm)) {
+        message(paste('Get a', ngramName, 'tokenizer...'))
+        tokenizer = function(x) NGramTokenizer(x, Weka_control(min = n, max = n))
     
-    message(paste('Compute the DTM...'))
-    execTime = system.time({
-        ngramsDtm = DocumentTermMatrix(corpus, control = list(tokenize = tokenizer))
-    })
-    message(paste(ngramName, 'DTM built in', round(execTime["elapsed"], 2), "secs"))
-    message(paste(ngramName, 'DTM size:', round(object.size(ngramsDtm)/1024/2014, 2), 'MB'))
+        message(paste('Compute the DTM...'))
+        execTime = system.time({
+            ngramsDtm = DocumentTermMatrix(corpus, control = list(tokenize = tokenizer))
+        })
+        message(paste(ngramName, 'DTM built in', round(execTime["elapsed"], 2), "secs"))
+        message(paste(ngramName, 'DTM size:', round(object.size(ngramsDtm)/1024/2014, 2), 'MB'))
+    }
     ngramsDtmAsMatrix = as.matrix(ngramsDtm)
     ngramsUniqueCount = dim(ngramsDtmAsMatrix)[2]
     message(paste('Compute the', ngramName, 'probabilities for', ngramsUniqueCount, 'grams'))    
@@ -83,11 +86,12 @@ buildNGramTM2 <- function(corpus, n, lowerOrderNGram, max_loop) {
     } else {
         # 2+ grams        
         # Use the lower order NGram to compute the MLE probabilities
-        # stop('Not implemented!')
+        
+        key(lowerOrderNGram)
         
         ngramsListCount = length(ngramsCount)
-        ngramsLowerString = c()
-        ngramsLogProb = c() 
+        ngramsLowerString = rep(NA, ngramsListCount) # Pre-allocate the vector's size for performance.
+        ngramsLogProb = rep(NA, ngramsListCount) # Pre-allocate the vector's size for performance.
         matchedLowerOrderGramCount = 0
         missingLowerOrderGramCount = 0
         missingLowerOrderGrams = c()
@@ -97,12 +101,12 @@ buildNGramTM2 <- function(corpus, n, lowerOrderNGram, max_loop) {
         }
         message(paste('Loop count:', loopCount, ', starting on', Sys.time()))
         startSysTime = Sys.time() # Rough execution timer
+        #loopCount = 100 # For Testing
         for (i in 1:loopCount) {
             #for (i in 1:100000) {
             if (i %% 100000 == 0) {
                 endSysTime = Sys.time()
-                timeElapsed = as.numeric(endSysTime - startSysTime)
-                message(paste('Processed', i, 'grams,', '(', round(i*100/ngramsListCount), '%) in', round(timeElapsed, 2), 'secs,',
+                message(paste('Processed', i, 'grams,', '(', round(i*100/ngramsListCount), '%) in', format(endSysTime - startSysTime),
                               'matchedLowerOrderGramCount =', matchedLowerOrderGramCount, 
                               '(', round(matchedLowerOrderGramCount*100/ngramsListCount), '%),',
                               'missingLowerOrderGramCount =', missingLowerOrderGramCount))
@@ -118,29 +122,33 @@ buildNGramTM2 <- function(corpus, n, lowerOrderNGram, max_loop) {
             #     message(paste0("lowerOrderGramString: '", lowerOrderGramString, "'"))
             # }
             
-            # Look up the lower-order (n-1)-gram in the lower order ngram data frame:
-            #lookupResult = filter(lowerOrderNGram, gram == lowerOrderGramString)
+            # Look up the lower-order (n-1)-gram in the lower order ngram data table:
             #lookupResult = lowerOrderNGram[gram == lowerOrderGramString]
             lookupResult = lowerOrderNGram[lowerOrderGramString] # data.table subsetting notation for a single-column keyed table
-            if (dim(lookupResult)[1] == 0) {
+            if (dim(lookupResult)[1] == 0 | is.na(lookupResult[1, count])) {
                 # No match found. It should be in the training set!?
-                #message(paste('No match found for lower-order gram', lowerOrderGramString))
+                # message(paste('No match found for lower-order gram', lowerOrderGramString))
                 missingLowerOrderGramCount = missingLowerOrderGramCount + 1
                 missingLowerOrderGrams = c(missingLowerOrderGrams, lowerOrderGramString)
                 # if (missingLowerOrderGramCount > 1000) {
                 #     stop(paste('Reached', missingLowerOrderGramCount, 'missing lower-order ngram count.'))
                 # }
             } else {
+                # message(paste('Found lower-order gram', lowerOrderGramString, ', count', lookupResult[1, count]))
                 matchedLowerOrderGramCount = matchedLowerOrderGramCount + 1
                 lowerOrderGramCount = lookupResult[1, count]
             }
             
             if (lowerOrderGramCount > 0) {
-                ngramsLowerString = c(ngramsLowerString, lowerOrderGramString)
-                ngramsLogProb = c(ngramsLogProb, log(ngramCount/lowerOrderGramCount))
+                # ngramsLowerString = c(ngramsLowerString, lowerOrderGramString)
+                ngramsLowerString[i] = lowerOrderGramString
+                # ngramsLogProb = c(ngramsLogProb, log(ngramCount/lowerOrderGramCount))
+                ngramsLogProb[i] = log(ngramCount/lowerOrderGramCount)
             } else {
-                ngramsLowerString = c(ngramsLowerString, NA)
-                ngramsLogProb = c(ngramsLogProb, NA)
+                # ngramsLowerString = c(ngramsLowerString, NA)
+                ngramsLowerString[i] = NA
+                # ngramsLogProb = c(ngramsLogProb, NA)
+                ngramsLogProb[i] = NA
             }
         }
         
@@ -155,12 +163,15 @@ buildNGramTM2 <- function(corpus, n, lowerOrderNGram, max_loop) {
     }
     
     # Produce a data table
+    startSysTime = Sys.time()
     ngramsDat = data.table(
         gram = ngramsString, 
         lowergram = ngramsLowerString, 
         count = ngramsCount, 
         logprob = ngramsLogProb,
         key = "gram")    
+    endSysTime = Sys.time()
+    message(paste('Data table created in', format(endSysTime - startSysTime)))
     
     message(paste(ngramName, 'unique grams count:', dim(ngramsDat)[1]))
     message(paste(ngramName, 'data frame size   :', round(object.size(ngramsDat)/1024/2014, 2), 'MB'))
