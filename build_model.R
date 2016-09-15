@@ -98,3 +98,6 @@ execTimeMins = execTimeSeconds/60
 execTimeSecsAfterMins = execTimeSeconds %% 60
 message(paste('Quadgrams model built in', round(execTimeMins, 2), 'mins, ', round(execTimeSecsAfterMins, 2), 'secs'))
 quadgramsDat2 = readRDS(file = paste0(g_corpus_directory_en, '\\quadgrams_sample_', sprintf('%.1f', sampleRate), '.rds'))
+
+
+# model = loadModel(directory = paste0(g_corpus_directory_en, '\\models\\10_percent_sample_mle'), sample_rate = 10)

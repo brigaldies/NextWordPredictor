@@ -1,4 +1,7 @@
-require(tm)
+# Configuration dependency
+if (is.na(g_ngram_package)) {
+    stop(paste('Global parameter g_ngram_package is undefined!'))
+}
 
 # -----------------------------------------------------------------------------
 # Function: loadCorpus

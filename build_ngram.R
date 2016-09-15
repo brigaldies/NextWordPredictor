@@ -180,33 +180,6 @@ buildNGramTM2 <- function(corpus, dtm, n, lowerOrderNGram, max_loop) {
     ngramsDat
 }
 
-g_spacesRegex = '\\s+'
-getFirstNTokens <- function(ngram_string, tokens_count_to_retrieve) {
-    if (tokens_count_to_retrieve <= 0) {
-        stop(paste('Invalid tokens count to retrieve', tokens_count_to_retrieve))
-    }
-    tokens = unlist(strsplit(ngram_string, g_spacesRegex))
-    tokensCount = length(tokens)
-    if (tokens_count_to_retrieve > tokensCount) {
-        stop(paste('Invalid tokens count', tokens_count_to_retrieve))
-    }    
-    ntokens = tokens[1:tokens_count_to_retrieve]
-    stri_paste(ntokens, collapse = ' ')
-}
-
-getLastNTokens <- function(ngram, tokens_count_to_retrieve) {
-    if (tokens_count_to_retrieve <= 0) {
-        stop(paste('Invalid tokens count to retrieve', tokens_count_to_retrieve))
-    }
-    tokens = unlist(strsplit(ngram, g_spacesRegex))
-    tokensCount = length(tokens)
-    if (tokens_count_to_retrieve > tokensCount) {
-        stop(paste('Invalid tokens count', tokens_count_to_retrieve))
-    }    
-    ntokens = tokens[max(tokensCount -(tokens_count_to_retrieve-1),1):tokensCount]
-    stri_paste(ntokens, collapse = ' ')
-}
-
 buildNGramQuanteda <- function(corpus, n) {
     require(quanteda)
     message(paste0('Building a', n, '-gram with Quanteda...'))   
