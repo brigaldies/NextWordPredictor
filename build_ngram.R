@@ -1,5 +1,3 @@
-require(tm)
-
 buildNGram <- function(corpus, n) {
     ngram = NULL
     packageLowerCase = tolower(g_ngram_package)
@@ -14,7 +12,6 @@ buildNGram <- function(corpus, n) {
 }
 
 buildNGramTM <- function(corpus, n) {
-    require(RWeka)
     ngramName = paste0(n, '-gram')
     message(paste('Building a', ngramName, 'with TM/RWeka...'))    
     
@@ -44,8 +41,7 @@ buildNGramTM <- function(corpus, n) {
     ngramLogPercentSortedDat
 }
 
-buildNGramTM2 <- function(corpus, dtm, n, lowerOrderNGram, max_loop) {
-    require(RWeka)
+buildNGramWithMLE <- function(corpus, dtm, n, lowerOrderNGram, max_loop) {
     ngramName = paste0(n, '-gram')
     ngramLowerOrderName = paste0(n-1, '-gram')
     message(paste('Building a', ngramName, 'with TM/RWeka...'))    
@@ -60,7 +56,7 @@ buildNGramTM2 <- function(corpus, dtm, n, lowerOrderNGram, max_loop) {
     
     # Get the tokenizer
     ngramsDtm = dtm
-    if (is.na(dtm)) {
+    if (is.null(dtm)) {
         message(paste('Get a', ngramName, 'tokenizer...'))
         tokenizer = function(x) NGramTokenizer(x, Weka_control(min = n, max = n))
     

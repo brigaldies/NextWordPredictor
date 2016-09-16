@@ -105,8 +105,11 @@ cleanCorpus <- function(c) {
 cleanCorpusTM <- function(c) {
     
     message('Corpus cleansing ...')
+
+    message('Convert to lower case ...')
+    c <- tm_map(c, content_transformer(tolower))
     
-    message('Remove punctuation ...')
+    message('Remove or replace non-english characters ...')
     replaceWith <- content_transformer(function(x, pattern, replacement) {return (gsub(pattern, replacement, x))})
     replaceWithSpace <- content_transformer(function(x, pattern) {return (gsub(pattern, ' ', x))})
     c <- tm_map(c, replaceWith, "`", "'")
@@ -114,12 +117,21 @@ cleanCorpusTM <- function(c) {
     c <- tm_map(c, replaceWith, "‘", "'")    
     c <- tm_map(c, replaceWith, "“", '"')
     c <- tm_map(c, replaceWith, "”", '"')   
+    c <- tm_map(c, replaceWith, "”", '"')   
+    c <- tm_map(c, replaceWith, "â", 'a')
+    c <- tm_map(c, replaceWith, "î", "i")
+    c <- tm_map(c, replaceWith, "é", "e")
+    c <- tm_map(c, replaceWithSpace, "„")   
+    c <- tm_map(c, replaceWithSpace, "†")
+    c <- tm_map(c, replaceWithSpace, "•")
+    c <- tm_map(c, replaceWithSpace, "ø")
     c <- tm_map(c, replaceWithSpace, "—")     
     c <- tm_map(c, replaceWithSpace, "–")
     c <- tm_map(c, replaceWithSpace, "…")  
     c <- tm_map(c, replaceWithSpace, "™")
     c <- tm_map(c, replaceWith, "€", "Euros")
 
+    message('Remove punctuation ...')
     c <- tm_map(c, removePunctuation)    
     
     message('Remove numbers ...')
@@ -135,10 +147,7 @@ cleanCorpusTM <- function(c) {
     c <- tm_map(c, removeWords, enProfanityWords[,1])
     
     message('Strip white spaces ...')
-    c <- tm_map(c, stripWhitespace)
-    
-    message('Convert to lower case ...')
-    c <- tm_map(c, content_transformer(tolower))
+    c <- tm_map(c, stripWhitespace)       
     
     # Return the cleaned Corpus
     c
@@ -153,4 +162,34 @@ cleanCorpusTM <- function(c) {
 # -----------------------------------------------------------------------------
 cleanCorpusQuanteda <- function(c) {        
     stop('cleanCorpusQuanteda: Not implemented!')
+}
+
+# -----------------------------------------------------------------------------
+# Function: writeCorpusToTextFile
+# 
+# Description: Write the Corpus documents into a single text file.
+#
+# Arguments:
+# c       : The corpus
+# filePath: Full path name of the file to write the documents to.
+#
+# Returns: TRUE
+# -----------------------------------------------------------------------------
+writeCorpusToTextFile <- function(c, filePath) {
+    execTime <- system.time({
+        message(paste('Writing the corpus documents to', filePath, '...'))
+        outFile = file(filePath, open = "wt", encoding = "UTF-8")
+        for (i in 1:length(c)) {
+            message(paste('Writing document', i, '...'))
+            doc = c1[[i]]$content
+            writeLines(paste('*** Document', i, '***'), con = outFile)
+            linesCount = length(doc)
+            for (j in 1:linesCount) {
+                writeLines(doc[j], con = outFile)
+            }
+        }
+        close(outFile)
+    })
+    message(paste('Corpus documents written in', round(execTime['elapsed'], 2), 'secs'))
+    TRUE
 }

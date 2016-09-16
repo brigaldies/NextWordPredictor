@@ -80,9 +80,9 @@ partitionCorpusFile <- function(directory, file_name, sample_rate) {
     execTime <- system.time({
         set.seed(10)    
         filePath = paste0(directory, '\\', file_name)
-        cnx = file(filePath, open = "r")    
-        samplePath = paste0(filePath, '.sample_', sprintf('%.1f', sample_rate * 100))
-        nonSamplePath = paste0(filePath, '.sample_', sprintf('%.1f', (1 - sample_rate) * 100))        
+        cnx = file(filePath, open = "rb") # Read in binary mode
+        samplePath = paste0(filePath, '.partition_', sprintf('%.1f', sample_rate * 100))
+        nonSamplePath = paste0(filePath, '.partition_', sprintf('%.1f', (1 - sample_rate) * 100))        
         message(paste('Creating samples', samplePath, 'and', nonSamplePath))
         sampleFile = file(samplePath, open = "wt")
         nonSampleFile = file(nonSamplePath, open = "wt")

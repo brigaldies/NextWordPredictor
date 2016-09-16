@@ -1,18 +1,5 @@
 # c1 = parallelizeTask(cleanCorpus, c1) # No gain!
 
-# Write out the corpus back out to a file after cleanup to inspect
-outPath = paste0(g_corpus_directory_en, '\\', 'cleaned_corpus_sample_', sprintf('%.1f', sampleRate), '.txt')
-outFile = file(outPath, open = "wt", encoding = "UTF-8")
-docsCount = 3
-for (i in 1:docsCount) {
-    doc = c1[[i]]$content
-    writeLines(paste('*** Document', i, '***'), con = outFile)
-    linesCount = length(doc)
-    for (j in 1:linesCount) {
-        writeLines(doc[j], con = outFile)
-    }
-}
-close(outFile)
 # Re-load from the cleanup corpus
 c1 = loadCorpus(directory = g_corpus_directory_en, files_pattern = 'cleaned_corpus_sample_10.0.txt')
 
@@ -52,6 +39,5 @@ execTime <- system.time({
 message(paste('1+2-grams model built in', round(execTime["elapsed"], 2), "secs"))
 
 # ----------------------- WORK IN PROGRESS (BEGIN) ----------------------------
-
 
 # ----------------------- WORK IN PROGRESS (END) ----------------------------
