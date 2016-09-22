@@ -1,5 +1,5 @@
 # Load the model
-loadModel <- function(directory, sample_rate) {
+loadModel0 <- function(directory, sample_rate) {
     model = list()
     
     execTime = system.time({
@@ -25,6 +25,17 @@ loadModel <- function(directory, sample_rate) {
         model$quadgrams = readRDS(file = paste0(directory, '/quadgrams.rds'))
         message(paste('Loaded', format(dim(model$quadgrams)[1], big.mark = ',', scientific = FALSE), 'quadgrams.'))
         setkey(model$quadgrams, lowergram)
+    })
+    message(paste('Model loaded in', round(execTime['elapsed'], 2), 'secs'))
+    message(paste('Model size: ', round(object.size(model)/1024/1024, 2), 'MB'))
+    
+    # Return the model
+    model    
+}
+
+loadModel <- function(directory, sample_rate) {
+    execTime = system.time({
+        model = readRDS(file = paste0(directory, '/model.rds'))
     })
     message(paste('Model loaded in', round(execTime['elapsed'], 2), 'secs'))
     message(paste('Model size: ', round(object.size(model)/1024/1024, 2), 'MB'))

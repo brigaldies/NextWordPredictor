@@ -13,10 +13,12 @@ require(RWeka) # For tokenizer.
 #require(NLP)
 require(quanteda)
 require(stringi)
-require(stringr)
+# require(stringr)
 require(data.table)
 #require(ngram) # For 'concat' function.
 options(table_counter = TRUE)
+require(snow)
+require(microbenchmark)
 
 R.Version()
 sessionInfo()

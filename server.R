@@ -1,7 +1,4 @@
 # Required libraries
-require(tm) # Corpus and n-gram models.
-require(RWeka) # For 2+ gram tokenizer.
-require(quanteda) # For unigram tokenizer (The RWeka tokenizer removes the stop words)
 require(stringi)
 require(stringr)
 require(data.table)
@@ -27,18 +24,18 @@ model = loadModel(directory = paste0('.'), sample_rate = 10)
 # -----------------------------------------------------------------------------
 shinyServer(function(input, output) {
     
-    output$prediction <- renderText({ 
+    dataset <- reactive({            
+        predictions = NULL
         sentence = input$sentence
         message(paste('Input sentence: "', sentence, '"'))
         words = unlist(strsplit(sentence, g_spacesRegex))
-        predictionFirstWord = ''
         if (length(words) >= 3) {
-            predictions = predictNextWord(model = model,
-                                          sentence = sentence,
-                                          matches_count_max = 5)
-            predictionFirstWord = predictions[1]
+            predictions = predictWithStupidBackoff(model, sentence) 
         }
-        
-        predictionFirstWord
+        predictions            
+    })
+    
+    output$predictionsDT <- renderTable({
+        dataset()
     })
 })
