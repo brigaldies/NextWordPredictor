@@ -195,6 +195,7 @@ predictWithStupidBackoff <- function(model, sentence, matches_count_max = 10, la
                 unigramMatchesCount = dim(unigramMatches)[1]
                 if (unigramMatchesCount > 0) {
                     unigramMatches[, c('sprob') := { lambda * lambda * lambda * exp(logprob) }] # Calculate the weighted probability
+                    unigramMatches[, c('last_word_in_gram') := { gram }]
                     #print(unigramMatches)
                     additionalMatchesCount = unigramMatchesCount
                     if (is.null(matches)) {

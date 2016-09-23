@@ -3,3 +3,7 @@
 .RData
 NextWordPredictor.Rproj
 .cache
+*.rds
+models
+en_profanity.txt
+rsconnect
