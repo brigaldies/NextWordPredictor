@@ -28,11 +28,12 @@ shinyServer(function(input, output, session) {
         predictions = NULL
         sentence = input$sentence
         message(paste('Input sentence: "', sentence, '"'))
-        words = unlist(strsplit(sentence, g_spacesRegex))
-        if (length(words) >= 3) {
-            predictions = predictWithStupidBackoff(model, sentence) 
-        }
-        predictions            
+        # words = unlist(strsplit(sentence, g_spacesRegex))
+        # if (length(words) >= 3) {
+        #     predictions = predictWithStupidBackoff2(model, sentence) 
+        # }
+        # predictions            
+        predictWithStupidBackoff2(model, sentence) 
     })
     
     top_prediction <- reactive({

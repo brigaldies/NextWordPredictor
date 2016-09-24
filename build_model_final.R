@@ -21,6 +21,7 @@ writeCorpusToTextFile(c1, paste0(g_corpus_directory_en, '/corpus_cleaned_partiti
 
 # Save the cleaned corpus
 saveRDS(object = c1, file = paste0(g_corpus_directory_en, '/corpus_cleaned_partition_', sprintf('%.1f', partitionRate), '.rds'))
+# c1 = readRDS(file = paste0(g_corpus_directory_en, '/corpus_cleaned_partition_', sprintf('%.1f', partitionRate), '.rds'))
 
 # -----------------------------------------------------------------------------
 # Build unigrams with Quanteda
@@ -33,6 +34,7 @@ execTimeSeconds = execTime["elapsed"]
 execTimeMins = execTimeSeconds/60
 execTimeSecsAfterMins = execTimeSeconds %% 60
 message(paste('Unigrams model built in', round(execTimeMins), 'mins, ', round(execTimeSecsAfterMins, 2), 'secs'))
+# unigramsDat = readRDS(file = paste0(g_corpus_directory_en, '\\unigrams_mle_partition_', sprintf('%.1f', partitionRate), '.rds'))
 
 # -----------------------------------------------------------------------------
 # Build bigrams with TM/RWeka 
@@ -68,6 +70,7 @@ execTimeSeconds = execTime["elapsed"]
 execTimeMins = execTimeSeconds/60
 execTimeSecsAfterMins = execTimeSeconds %% 60
 message(paste('Bigrams model built in', round(execTimeMins), 'mins, ', round(execTimeSecsAfterMins, 2), 'secs'))
+# bigramsDat2 = readRDS(file = bigramsModelPathNameNoKSmoothing)
 
 # -----------------------------------------------------------------------------
 # Build trigrams with TM/RWeka 
@@ -104,6 +107,7 @@ execTimeSeconds = execTime["elapsed"]
 execTimeMins = execTimeSeconds/60
 execTimeSecsAfterMins = execTimeSeconds %% 60
 message(paste('Trigrams model built in', round(execTimeMins, 2), 'mins, ', round(execTimeSecsAfterMins, 2), 'secs'))
+# trigramsDat2 = readRDS(file = trigramsModelPathNameNoKSmoothing)
 
 # -----------------------------------------------------------------------------
 # Build quadgrams with TM/RWeka 
@@ -137,6 +141,44 @@ execTimeSeconds = execTime["elapsed"]
 execTimeMins = execTimeSeconds/60
 execTimeSecsAfterMins = execTimeSeconds %% 60
 message(paste('Quadgrams model built in', round(execTimeMins, 2), 'mins, ', round(execTimeSecsAfterMins, 2), 'secs'))
+# quadgramsDat2 = readRDS(file = quadgramsModelPathNameNoKSmoothing)
+
+# -----------------------------------------------------------------------------
+# Build pentagrams with TM/RWeka 
+# With a 10% sample:
+# TDM build     : ~7 mins
+# pentagramsDat2: ~ <1 min
+# -----------------------------------------------------------------------------
+
+ngramName = paste0(5, '-gram')
+tokenizer5 = function(x) NGramTokenizer(x, Weka_control(min = 5, max = 5))
+pentagramsDtmPathName = paste0(g_corpus_directory_en, '\\pentagrams_dtm_partition_', sprintf('%.1f', partitionRate), '.rds')
+message(paste('Compute the DTM...'))
+execTime = system.time({
+    pentagramsDtm = DocumentTermMatrix(c1, control = list(tokenize = tokenizer5))
+    saveRDS(object = pentagramsDtm, file = pentagramsDtmPathName)
+})
+message(paste(ngramName, 'DTM built in', round(execTime["elapsed"], 2), "secs"))
+
+pentagramsModelPathNameNoKSmoothing = paste0(g_corpus_directory_en, 
+                                            '\\pentagrams_mle_partition_', sprintf('%.1f', partitionRate), 
+                                            '.rds')
+execTime = system.time({
+    pentagramsDat = buildNGramWithMLE3(corpus = NULL, # Use 'c1' is pentagramsDtm was not calculated ahead of time.
+                                      dtm = pentagramsDtm,
+                                      n = 5,
+                                      k = 0,
+                                      lowerOrderNGram = quadgramsDat2,
+                                      minCount = 2,
+                                      parallel = FALSE)
+    pentagramsDat2 = pentagramsDat[!is.na(logprob)]
+    saveRDS(object = pentagramsDat2, file = pentagramsModelPathNameNoKSmoothing)
+})
+execTimeSeconds = execTime["elapsed"]
+execTimeMins = execTimeSeconds/60
+execTimeSecsAfterMins = execTimeSeconds %% 60
+message(paste('Pentagrams model built in', round(execTimeMins, 2), 'mins, ', round(execTimeSecsAfterMins, 2), 'secs'))
+# pentagramsDat2 = readRDS(file = pentagramsModelPathNameNoKSmoothing)
 
 # -----------------------------------------------------------------------------
 # Build final model
@@ -146,19 +188,29 @@ remove(modelUnderTest)
 modelUnderTest = list()
 
 # Load the unigrams
-modelUnderTest$unigrams = unigramsDat[count >= 2][, .(gram, logprob)][order(logprob, decreasing = TRUE)]
+# modelUnderTest$unigrams = unigramsDat[count >= 2][, .(gram, logprob)][order(logprob, decreasing = TRUE)]
+modelUnderTest$unigrams = unigramsDat[count >= 2][, .(gram, count, logprob)][order(logprob, decreasing = TRUE)]
+setkey(modelUnderTest$unigrams, gram)
 
 # Load the bigrams
-modelUnderTest$bigrams = bigramsDat2[count >= 2][, .(gram, lowergram, logprob, last_word_in_gram)][order(logprob, decreasing = TRUE)]
+# modelUnderTest$bigrams = bigramsDat2[count >= 2][, .(gram, lowergram, logprob, last_word_in_gram)][order(logprob, decreasing = TRUE)]
+modelUnderTest$bigrams = bigramsDat2[count >= 2][, .(gram, count, lowergram, logprob, last_word_in_gram)][order(logprob, decreasing = TRUE)]
 setkey(modelUnderTest$bigrams, lowergram)
 
 # Load the trigrams
-modelUnderTest$trigrams = trigramsDat2[count >= 2][, .(gram, lowergram, logprob, last_word_in_gram)][order(logprob, decreasing = TRUE)]
+# modelUnderTest$trigrams = trigramsDat2[count >= 2][, .(gram, lowergram, logprob, last_word_in_gram)][order(logprob, decreasing = TRUE)]
+modelUnderTest$trigrams = trigramsDat2[count >= 2][, .(gram, count, lowergram, logprob, last_word_in_gram)][order(logprob, decreasing = TRUE)]
 setkey(modelUnderTest$trigrams, lowergram)
 
 # Load the quadgrams
-modelUnderTest$quadgrams = quadgramsDat2[count >= 2][, .(gram, lowergram, logprob, last_word_in_gram)][order(logprob, decreasing = TRUE)]
+# modelUnderTest$quadgrams = quadgramsDat2[count >= 2][, .(gram, lowergram, logprob, last_word_in_gram)][order(logprob, decreasing = TRUE)]
+modelUnderTest$quadgrams = quadgramsDat2[count >= 2][, .(gram, count, lowergram, logprob, last_word_in_gram)][order(logprob, decreasing = TRUE)]
 setkey(modelUnderTest$quadgrams, lowergram)
+
+# Load the pentagrams
+# modelUnderTest$pentagrams = pentagramsDat2[count >= 2][, .(gram, lowergram, logprob, last_word_in_gram)][order(logprob, decreasing = TRUE)]
+modelUnderTest$pentagrams = pentagramsDat2[count >= 2][, .(gram, count, lowergram, logprob, last_word_in_gram)][order(logprob, decreasing = TRUE)]
+setkey(modelUnderTest$pentagrams, lowergram)
 
 message(paste(round(object.size(modelUnderTest)/1024/1024, 2), 'MB'))
 
