@@ -216,28 +216,55 @@ predictWithStupidBackoff <- function(model, sentence, matches_count_max = 10, la
     matches
 }
 
-predictWithStupidBackoff2 <- function(model, sentence, matches_count_max = 10, lambda = 0.4, trace = FALSE) {
-    if (trace) message(paste('Input sentence:', sentence))
+# -----------------------------------------------------------------------------
+# Function: predictWithStupidBackoff2
+#
+# Description: Predict the next X "best" words given a sentence according to the
+# "Stupid Backoff" algorithm described in [Insert URL]. Improved version of
+# predictWithStupidBackoff, using a recursive search that can start with any 
+# number of words in the sentence.
+#
+# Arguments:
+# model            : The N-gram model
+# n                : The 'N' in the N-gram model, to start the algorithm at.
+#                    Default value is 5, which is the highest gram order in the
+#                    model. n must be 2 or higher.
+# sentence         : The previous words in a sentence
+# matches_count_max: Maximum number of candidate words to return
+# lambda           : The "weight" in the stupid backoff algorithm, with a 
+#                    default value of 0.4 per the algorithm's author.
+# trace            : TRUE or FALSE (default) to display messages during 
+#                    execution
+#
+# The matches_count_max best predictions.
+# -----------------------------------------------------------------------------
+predictWithStupidBackoff2 <- function(model, n = 5, sentence, matches_count_max = 10, lambda = 0.4, trace = FALSE) {
+    
+    if (trace) {
+        message(paste('n:', n))
+        message(paste('Input sentence:', sentence))
+    }
     
     # Clean the input sentence
     sentenceCleaned = gsub('\'', '', sentence) # Remove quotes
     sentenceCleaned = stringr::str_replace_all(sentence, '[^[:alpha:]]', ' ') # Keep alpha characters only
     sentenceCleaned = tolower(sentenceCleaned) # Convert to lower case
     
-    if (trace) message(paste('Cleaned sentence:', sentenceCleaned))
+    if (trace) message(paste0('Cleaned sentence: "', sentenceCleaned, '"'))
     
     # Tokenize the sentence
     tokens = unlist(strsplit(sentenceCleaned, '\\s+'))
     tokensCount = length(tokens)
     
-    lookupWordsSequence = tokens[max(1, tokensCount - 3):tokensCount] 
-    # if (trace) message(paste('Lookup words sequence:', lookupWordsSequence))
+    lookupWordsSequence = tokens[max(1, tokensCount - (n-2)):tokensCount] 
+    if (trace) message(paste0('Lookup words sequence: "', paste(lookupWordsSequence, collapse = ' '), '"'))
     
-    # Identify the N-gram model to start the prediction with, and have some recursive backup.
-    
+    # Identify the N-gram model to start the prediction with, and start the recursive search.
     matches = NULL
     predictions = gramLookup(model, lookupWordsSequence, matches, matches_count_max, lambda, trace)
-    predictions[order(sprob, decreasing = TRUE)]
+    predictions = predictions[order(sprob, decreasing = TRUE)][,.(last_word_in_gram, gram, sprob, logprob)]
+    names(predictions) = c('Predicted Word', 'From Gram', 'Weighted Probability', 'MLE (Log)')
+    predictions
 }
 
 gramLookup <- function(model, lookupWordsSequence, matchesThusFar, matches_count_max = 10, lambda = 0.4, trace = FALSE) {
