@@ -2,10 +2,12 @@ library(shiny)
 library(shinydashboard)
 library(DT)
 
+sampleRate = 10
+
 shinyUI(dashboardPage(
     dashboardHeader(title = "Word Predictor 1.0", dropdownMenuOutput("notificationMenu")),
     dashboardSidebar(
-        sidebarMenu(
+        sidebarMenu(id = 'menu',
             menuItem("Predictor", tabName = "predictor", icon = icon("calculator")),
             menuItem("Parameters", tabName = "parameters", icon = icon("dashboard")),
             menuItem("Model", tabName = "model", icon = icon("cube")),
@@ -25,7 +27,7 @@ shinyUI(dashboardPage(
                                    hence there is no Submit button to hit to see the predictions of the next word.'),
                             tags$p('The ten buttons below the input text show the weighted probability-ranked predicted words. Click on any button 
                                    if you see the next word you need. The selected word will be appended to your text.'),
-                            tags$p('Go to the Parameters page to choose different algorithm settings.'),
+                            tags$p('Go to the', actionLink("link_to_parameters", "Parameters"), 'page to choose different algorithm settings.'),
                             tags$p(tags$strong('Note'), ': Prior to the very first prediction, the model will be (lazy) loaded, which takes a few seconds.'),
                             tags$p('Have fun!'),
                             hr(),
@@ -56,7 +58,7 @@ shinyUI(dashboardPage(
             tabItem(tabName = 'parameters',
                     fluidRow(
                         box(title = "Stupid Backoff Algorithm Weight (Lambda)", width = 12, status = "primary", solidHeader = TRUE,
-                            "In the \"Stupid Backoff\" prediction algorithm, if a higher-order N-gram does not provide any prediction, 
+                            "In our implementation of the \"Stupid Backoff\" prediction", actionLink("link_to_algorithm", "algorithm"), "if a higher-order N-gram does not provide any prediction, 
                             the algorithm \"backs off\" to the next lower order (N-1)-gram, weighted by a fixed weight, called \"lambda\". 
                             Use the slider below to set the value of lambda. The default value is 0.4, per the algortihm's authors' recommendation (Brants et al., 2007).", 
                             br(),
@@ -90,7 +92,34 @@ shinyUI(dashboardPage(
             ),
             # Tab: model
             tabItem(tabName = 'model',
-                    tags$p("Documentation on the model's construction.")
+                    fluidRow(
+                        box(title = "The English Corpus", width = 12, status = "info", solidHeader = TRUE, collapsible = TRUE, collapsed = TRUE,
+                            tags$p('Our English next-word-in-a-sentence predictor was trained, tested, and validated on
+                            the Coursera-provided english version of the Corpus from', tags$a(href = 'www.corpora.heliohost.org', 'HC Corpora')),
+                            tags$p('The Corpus contains the three files, or documents, as listed in Table 1 below:'),
+                            tableOutput('enUSFilesStatsDF'),
+                            tags$p('The English Corpus was partitioned as follows:'),
+                            tags$ol(
+                                tags$li(paste(sprintf('%.1f', sampleRate), '% for training.')),
+                                tags$li(paste('Another', sprintf('%.1f', sampleRate), 'for testing.')),
+                                tags$li(paste('The remaining', sprintf('%.1f', 100-2*sampleRate), 'for validation.'))
+                            ),
+                            tags$p('The sampled files that are used to produce the training dataset are further characterized in table 2 below:'),
+                            tableOutput('enUSFilesStatsTrainingDataDF')
+                            
+                        )
+                    ),
+                    fluidRow(
+                        box(title = "The Training Dataset", width = 12, status = "info", solidHeader = TRUE, collapsible = TRUE, collapsed = TRUE,
+                            tags$p('Loading of files with R TM Corpus function. Cleaning with TM... Tokenization with RWeka.'),
+                            tags$p('Plots the unigrams, bigrams, trigrams, quadgrams, and pentagrams.')
+                        )
+                    ),
+                    fluidRow(
+                        box(title = "The Model", width = 12, status = "info", solidHeader = TRUE, collapsible = TRUE, collapsed = FALSE,
+                            tags$p('*** Describe the Model data structure.')
+                        )
+                    )
             ),
             # Tab: algorithm
             tabItem(tabName = 'algorithm',

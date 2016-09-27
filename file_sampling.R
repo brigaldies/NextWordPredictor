@@ -43,7 +43,7 @@ sampleCorpusFile <- function(directory, file_name, sample_rate) {
             message(paste(sampleCount, 'sampled lines'))
             sampleSize = sampleSize + sampleCount
             
-            # Convert on-ASCII characters
+            # Convert non-ASCII characters
             sampleLines <- stringi::stri_trans_general(sampleLines, "latin-ascii")
             
             # Write the sampled lines to the sample file

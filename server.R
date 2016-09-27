@@ -24,10 +24,23 @@ modelLoadExecTime = NULL
 # Some session variables
 predictionsCount = 0
 
+# Training data sample rate
+sampleRate = 10
+fileStats = readRDS('./en_US.filestats.rds')
+fileStatsTraining = readRDS(paste0('.', '\\en_US.filestats_partition_', sprintf('%.1f', sampleRate), '.rds'))
+
 # -----------------------------------------------------------------------------
 # Shiny server
 # -----------------------------------------------------------------------------
 shinyServer(function(input, output, session) {
+    
+    # Application's internal links
+    observeEvent(input$link_to_parameters, {
+        updateTabItems(session, inputId = "menu", selected = 'parameters')
+    })
+    observeEvent(input$link_to_algorithm, {
+        updateTabItems(session, inputId = "menu", selected = 'algorithm')
+    })
     
     model <- reactive({
         # Load model if not already loaded
@@ -120,8 +133,6 @@ shinyServer(function(input, output, session) {
         processWordButtonClick(session, input$sentence, dataset(), 10)
     })
     
-    
-    
     output$predictionsDT <- renderTable(
         dataset(),
         digits = 4
@@ -141,6 +152,18 @@ shinyServer(function(input, output, session) {
         updateRadioButtons(session, inputId = "ngram", selected = 5)
         
     })
+    
+    # Model page
+    output$enUSFilesStatsDF <- renderTable(
+        fileStats,
+        caption = 'Table 1: English Corpus Documents from HC Corpora',
+        align = "lrrrrr"
+    )
+    output$enUSFilesStatsTrainingDataDF <- renderTable(
+        fileStatsTraining,
+        caption = paste0('Table 2: ', sampleRate, '%-sampled English Corpus Documents from HC Corpora'),
+        align = "lrrrrr"
+    )
 })
 
 # Helper functions

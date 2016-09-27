@@ -64,7 +64,7 @@ We will be using the Coursera-provided **english** version of the Corpus from [H
 ```{r inspect-files, echo=FALSE, warning=FALSE, message=FALSE, error=TRUE, cache=TRUE}
 getFileStats <- function(filepath) {    
     message(paste('Processing', filepath))
-    cnx = file(filepath, open = "r")
+    cnx = file(filepath, open = "rb")
     totalLinesCount = 0
     lineLengths = c()    
     totalWordsCount = 0
@@ -76,7 +76,7 @@ getFileStats <- function(filepath) {
         if (linesCount == 0 ) {            
             break # print("Reached EOF")
         }        
-        lineLengths = c(lineLengths, unlist(lapply(lines, function(line) { nchar(line)})))    
+        lineLengths = c(lineLengths, unlist(lapply(lines, function(line) { nchar(stringi::stri_trans_general(line, "latin-ascii"))})))    
         totalWordsCount = totalWordsCount + sum(unlist(lapply(lines, function(line) { s = strsplit(line, split = '(\\s+)|[.,;:/!?]')[[1]]; s = s[s!=""]; length(s)})))        
     }
     minLineLength = min(lineLengths)
@@ -102,6 +102,7 @@ fileLinesCountList = lapply(dirSource$filelist, function(filepath) { getFileStat
 ```
 ```{r display-files-metrics, echo=FALSE, warning=FALSE, message=FALSE, error=TRUE}
 stats = cbind(files, data.frame(matrix(unlist(fileLinesCountList), nrow=length(files), byrow=T)))
+saveRDS(object = stats, file = paste0(g_corpus_directory_en, '\\en_US.filestats.rds'))
 htmlTable(stats, 
           rnames = FALSE,
           caption = 'English Corpus Documents from HC Corpora',
@@ -116,13 +117,13 @@ htmlTable(stats,
 ### Data Sampling
 
 ```{r sample_rate, echo=FALSE, warning=FALSE, message=FALSE, error=TRUE, cache=TRUE}
-sampleRate = 1
+sampleRate = 10
 ```
 
 Because of the very large sizes of the Corpus documents, the Corpus is explored with sampled data that is randomly extracted out of the Corpus files. For this report, we used a `r sampleRate`% sample rate. The R `rbinom` function is used for randomization.
 
 ```{r sampled_files, echo=FALSE, warning=FALSE, message=FALSE, error=TRUE, cache=TRUE}
-corpusFilesPattern = paste0('^en_US(.)*sample_', sprintf('%.1f', sampleRate), '$')
+corpusFilesPattern = paste0('^en_US(.)*partition_', sprintf('%.1f', sampleRate), '$')
 message(paste0("Loading the Corpus files with pattern '", corpusFilesPattern, "'..."))
 dirSamples = DirSource(directory = corpus_directory_en, pattern = corpusFilesPattern)
 samples = unlist(lapply(dirSamples$filelist, function(pathname) {unlist(strsplit(pathname, split = '/'))[2]}))
@@ -130,6 +131,8 @@ sampleLinesCountList = lapply(dirSamples$filelist, function(filepath) { getFileS
 ```
 ```{r display-sampled-files-metrics, echo=FALSE, warning=FALSE, message=FALSE, error=TRUE}
 sampleStats = cbind(samples, data.frame(matrix(unlist(sampleLinesCountList), nrow=length(sampleLinesCountList), byrow=T)))
+names(sampleStats) = header = c('Sample Document', 'Lines Count', 'Words Count', 'Min Line Length', 'Max Line Length', 'Average Line Length')
+saveRDS(object = sampleStats, file = paste0(g_corpus_directory_en, '\\en_US.filestats_partition_', sprintf('%.1f', sampleRate), '.rds'))
 htmlTable(sampleStats, 
           rnames = FALSE,
           caption = paste0(sampleRate, '% Sampled English Corpus Documents from HC Corpora'),
