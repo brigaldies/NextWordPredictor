@@ -1,0 +1,63 @@
+<h2>Set of N-Grams</h2>
+
+<p>Our predictive model is composed of the following five N-grams R <code>data.table</code> tables:</p>
+
+<ol>
+<li>A <strong>unigrams</strong> (N=1) data table (e.g., &ldquo;the&rdquo;, &ldquo;to&rdquo;);</li>
+<li>A <strong>bigrams</strong> (N=2) data table (e.g., &ldquo;i am&rdquo;, &ldquo;to be&rdquo;);</li>
+<li>A <strong>trigrams</strong> (N=3) data table (e.g., &ldquo;one of the&rdquo;, &ldquo;a lot of&rdquo;); </li>
+<li>A <strong>quadgrams</strong> (N=4) data table (e.g., &ldquo;the end of the&rdquo;, &ldquo;thanks for the&rdquo;);</li>
+<li>A <strong>pentagrams</strong> (N=5) data table (e.g., &ldquo;at the end of the&rdquo;, &ldquo;in the middle of the&rdquo;).</li>
+</ol>
+
+<h2>N-Gram Data Structure</h2>
+
+<p>Each N-Gram data table contains the following columns:</p>
+
+<table><thead>
+<tr>
+<th>Column</th>
+<th>Description</th>
+</tr>
+</thead><tbody>
+<tr>
+<td><strong>gram</strong></td>
+<td>The gram as a string of one (N=1) or more (N&gt;=2) words.</td>
+</tr>
+<tr>
+<td><strong>count</strong></td>
+<td>The number of times the gram is used in the Corpus training data set.</td>
+</tr>
+<tr>
+<td><strong>lowergram</strong></td>
+<td>The preceding lowe-order gram (e.g., for gram &ldquo;in the world&rdquo;, the lowergram is &ldquo;in the&rdquo;). This is applicable to N&gt;=2.</td>
+</tr>
+<tr>
+<td><strong>last_word_in_gram</strong></td>
+<td>The last word in the gram (e.g., for gram &ldquo;in the world&rdquo;, the last word is &ldquo;world&rdquo;).</td>
+</tr>
+<tr>
+<td><strong>logprob</strong></td>
+<td>Logarithm of the gram&#39;s <strong>Maximum Likelihood Estimation</strong> (MLE).</td>
+</tr>
+<tr>
+<td><strong>logpercent</strong></td>
+<td>Logarithm of the gram&#39;s <strong>Percent Use</strong> based on the gram&#39;s count.</td>
+</tr>
+</tbody></table>
+
+<h3>Percent Use</h3>
+
+<p>For a given N in an N-gram, a gram&#39;s <strong>Percent Use</strong> is calculated as the gram&#39;s count in the training corpus divided by the total number of grams in the N-gram, as shown by the formula below and using the notations in reference <a href="https://web.stanford.edu/%7Ejurafsky/slp3/4.pdf">N-Grams</a>:</p>
+
+<p>\(P(w_n) = \frac{C(w_n)}{Total Number of N-Grams}\)</p>
+
+<h3>Maximum Likelihood Estimation</h3>
+
+<h3>Unigrams Model</h3>
+
+<h3>Bigrams and Higher Order Models</h3>
+
+<h2>N-Gram Construction</h2>
+
+<h2>N-Gram Test</h2>

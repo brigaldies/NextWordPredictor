@@ -3,6 +3,7 @@ require(stringi)
 require(stringr)
 require(data.table)
 require(ggplot2)
+require(gridExtra)
 
 # -----------------------------------------------------------------------------
 # Startup processing (One-time)
@@ -27,22 +28,37 @@ predictionsCount = 0
 
 # Training data sample rate
 sampleRate = 10
-fileStats = readRDS('./en_US.filestats.rds')
-fileStatsTraining = readRDS(paste0('./en_US.filestats_partition_', sprintf('%.1f', sampleRate), '.rds'))
+execTime = system.time({
+    message(paste('Loading the English corpus statistics...'))
+    fileStats = readRDS('./en_US.filestats.rds')
+    fileStatsTraining = readRDS(paste0('./en_US.filestats_partition_', sprintf('%.1f', sampleRate), '.rds'))
+})
+execTimeSeconds = execTime["elapsed"]
+execTimeMins = execTimeSeconds/60
+execTimeSecsAfterMins = execTimeSeconds %% 60
+message(paste('English corpus statistics loaded in', round(execTimeMins, 2), 'mins, ', round(execTimeSecsAfterMins, 2), 'secs'))
 
 # -----------------------------------------------------------------------------
 # Shiny server
 # -----------------------------------------------------------------------------
 shinyServer(function(input, output, session) {
     
+    # -------------------------------------------------------------------------
     # Application's internal links
+    # -------------------------------------------------------------------------
     observeEvent(input$link_to_parameters, {
         updateTabItems(session, inputId = "menu", selected = 'parameters')
     })
     observeEvent(input$link_to_algorithm, {
         updateTabItems(session, inputId = "menu", selected = 'algorithm')
     })
+    observeEvent(input$link_to_application_code, {
+        updateTabItems(session, inputId = "menu", selected = 'code')
+    })
     
+    # -------------------------------------------------------------------------
+    # The model
+    # -------------------------------------------------------------------------
     model <- reactive({
         # Load model if not already loaded
         if (!modelLoaded) {
@@ -72,7 +88,7 @@ shinyServer(function(input, output, session) {
         model
     })
     
-    # TODO: Does not update the notificatio menu successfully yet!
+    # TODO: Does not update the notification menu successfully yet!
     predictionsCounter <- reactive({
         sentence = input$sentence
         predictionsCount = predictionsCount + 1
@@ -80,6 +96,9 @@ shinyServer(function(input, output, session) {
         predictionsCount
     })
     
+    # -------------------------------------------------------------------------
+    # The predicted words
+    # -------------------------------------------------------------------------
     dataset <- reactive({            
         predictions = NULL
         sentence = input$sentence
@@ -93,6 +112,9 @@ shinyServer(function(input, output, session) {
         predictions
     })
     
+    # -------------------------------------------------------------------------
+    # The top predicted word
+    # -------------------------------------------------------------------------
     top_prediction <- reactive({
         prediction = NULL
         if (!is.null(dataset())) {
@@ -102,7 +124,10 @@ shinyServer(function(input, output, session) {
         prediction
     })
 
-    # Observe the button clicks on the "predicted words" buttons below the input text box.
+    # -------------------------------------------------------------------------
+    # Observe the button clicks on the "predicted words" buttons below the 
+    # input text box.
+    # -------------------------------------------------------------------------
     observeEvent(input$word_1, {
         processWordButtonClick(session, input$sentence, dataset(), 1)
     })
@@ -133,12 +158,22 @@ shinyServer(function(input, output, session) {
     observeEvent(input$word_10, {
         processWordButtonClick(session, input$sentence, dataset(), 10)
     })
+    observeEvent(input$cleanInputText, {
+        updateTextInput(session, "sentence", value = '')
+    })
     
+    # -------------------------------------------------------------------------
+    # The table of predicted words
+    # -------------------------------------------------------------------------
     output$predictionsDT <- renderTable(
         dataset(),
         digits = 4
     )
     
+    # -------------------------------------------------------------------------
+    # Update the 10 buttons below the input text box to show the top 10 predicted
+    # words
+    # -------------------------------------------------------------------------
     observe(
         if (!is.null(dataset())) {
             for (i in 1:10) {
@@ -147,6 +182,9 @@ shinyServer(function(input, output, session) {
         }
     )
     
+    # -------------------------------------------------------------------------
+    # Parameters & settings
+    # -------------------------------------------------------------------------
     observeEvent(input$reset_parameters, {
         message(paste('Parameters reset.'))
         updateSliderInput(session, inputId = "lambda", value = 0.4)
@@ -154,7 +192,9 @@ shinyServer(function(input, output, session) {
         
     })
     
-    # Model page
+    # -------------------------------------------------------------------------
+    # Model documentation
+    # -------------------------------------------------------------------------
     output$enUSFilesStatsDF <- renderTable(
         fileStats,
         caption = 'Table 1: English Corpus Documents from HC Corpora',
@@ -165,22 +205,57 @@ shinyServer(function(input, output, session) {
         caption = paste0('Table 2: ', sampleRate, '%-sampled English Corpus Documents from HC Corpora'),
         align = "lrrrrr"
     )
+    output$modelTopUnigramsDT <- renderTable(
+        head(model()$unigrams[order(logprob, decreasing = TRUE)], n = 5),
+        display = c('s','s','d','f','f'),
+        digits = 4
+    )
+    output$modelTopBigramsDT <- renderTable(
+        head(model()$bigrams[order(logprob, decreasing = TRUE)], n = 5),
+        display = c('s','s','d','s','f','f','s'),
+        digits = 4
+    )
+    output$modelTopTrigramsDT <- renderTable(
+        head(model()$trigrams[order(logprob, decreasing = TRUE)], n = 5),
+        display = c('s','s','d','s','f','f','s'),
+        digits = 4
+    )
+    output$modelTopQuadgramsDT <- renderTable(
+        head(model()$quadgrams[order(logprob, decreasing = TRUE)], n = 5),
+        display = c('s','s','d','s','f','f','s'),
+        digits = 4
+    )
+    output$modelTopPentagramsDT <- renderTable(
+        head(model()$pentagrams[order(logprob, decreasing = TRUE)], n = 5),
+        display = c('s','s','d','s','f','f','s'),
+        digits = 4
+    )
+    
     output$unigramsPlot <- renderPlot({
-        topGramsPlot(model()$unigrams, 'Unigram', sampleRate)    })
+        plotMLE = topGramsPlot(1, model()$unigrams, 'Unigram', sampleRate, prob = 'MLE')    
+        plotPercent = topGramsPlot(2, model()$unigrams, 'Unigram', sampleRate, prob = 'COUNT')  
+        grid.arrange(plotMLE, plotPercent, ncol=2)
+    })
     output$bigramsPlot <- renderPlot({
-        topGramsPlot(model()$bigrams, 'Bigram', sampleRate)
+        plotMLE = topGramsPlot(3, model()$bigrams, 'Bigram', sampleRate, prob = 'MLE')
+        plotPercent = topGramsPlot(4, model()$bigrams, 'Bigram', sampleRate, prob = 'COUNT')
+        grid.arrange(plotMLE, plotPercent, ncol=2)
     })
     output$trigramsPlot <- renderPlot({
-        topGramsPlot(model()$trigrams, 'Trigram', sampleRate)
+        plotMLE = topGramsPlot(5, model()$trigrams, 'Trigram', sampleRate, prob = 'MLE')
+        plotPercent = topGramsPlot(6, model()$trigrams, 'Trigram', sampleRate, prob = 'COUNT')
+        grid.arrange(plotMLE, plotPercent, ncol=2)
     })
     output$quadgramsPlot <- renderPlot({
-        topGramsPlot(model()$quadgrams, 'quadgram', sampleRate)
+        plotMLE = topGramsPlot(7, model()$quadgrams, 'quadgram', sampleRate, prob = 'MLE')
+        plotPercent = topGramsPlot(8, model()$quadgrams, 'quadgram', sampleRate, prob = 'COUNT')
+        grid.arrange(plotMLE, plotPercent, ncol=2)
     })
     output$pentagramsPlot <- renderPlot({
-        topGramsPlot(model()$pentagrams, 'Pentagram', sampleRate)
+        plotMLE = topGramsPlot(9, model()$pentagrams, 'Pentagram', sampleRate, prob = 'MLE')
+        plotPercent = topGramsPlot(10, model()$pentagrams, 'Pentagram', sampleRate, prob = 'COUNT')
+        grid.arrange(plotMLE, plotPercent, ncol=2)
     })
-    
-    
 })
 
 # Helper functions
@@ -222,8 +297,7 @@ processWordButtonClick <- function(session, sentence, predictions, buttonNumber)
 #
 # Returns: The plot.
 # -----------------------------------------------------------------------------
-fig_num = 1
-topGramsPlot <- function(gramsModel, gramsModelName, sampleRate, topCount = 25, prob = 'MLE') {
+topGramsPlot <- function(fig_num, gramsModel, gramsModelName, sampleRate, topCount = 25, prob = 'MLE') {
     if (prob == 'MLE') {
         xlabel = 'Maximum Likelihood Estimation'
         gramsTopDat = head(gramsModel[order(logprob, decreasing = TRUE)], n = topCount)
@@ -242,6 +316,5 @@ topGramsPlot <- function(gramsModel, gramsModelName, sampleRate, topCount = 25, 
              x=gramsModelName, 
              y=paste0(xlabel, ' (', sampleRate, '% Sampled English Corpus)')) +
         theme(plot.title = element_text(size=12, face="bold", margin = margin(10, 0, 10, 0)))
-    fig_num = fig_num + 1
     plot
 }

@@ -247,7 +247,7 @@ predictWithStupidBackoff2 <- function(model, n = 5, sentence, matches_count_max 
     
     # Clean the input sentence
     sentenceCleaned = gsub('\'', '', sentence) # Remove quotes
-    sentenceCleaned = stringr::str_replace_all(sentence, '[^[:alpha:]]', ' ') # Keep alpha characters only
+    sentenceCleaned = stringr::str_replace_all(sentenceCleaned, '[^[:alpha:]]', ' ') # Keep alpha characters only
     sentenceCleaned = tolower(sentenceCleaned) # Convert to lower case
     
     if (trace) message(paste0('Cleaned sentence: "', sentenceCleaned, '"'))

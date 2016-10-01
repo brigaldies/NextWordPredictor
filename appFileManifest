@@ -6,3 +6,8 @@ predictor.R
 model.rds
 en_US.filestats.rds
 en_US.filestats_partition_10.0.rds
+training.md
+partitionCorpusFile.md
+buildCorpusTM.md
+model.md
+references.md

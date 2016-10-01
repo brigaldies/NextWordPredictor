@@ -1,6 +1,7 @@
 library(shiny)
 library(shinydashboard)
 library(DT)
+library(markdown)
 
 sampleRate = 10
 
@@ -9,10 +10,11 @@ shinyUI(dashboardPage(
     dashboardSidebar(
         sidebarMenu(id = 'menu',
             menuItem("Predictor", tabName = "predictor", icon = icon("calculator")),
-            menuItem("Parameters", tabName = "parameters", icon = icon("dashboard")),
+            menuItem("Parameters", tabName = "parameters", icon = icon("wrench")),
             menuItem("Model", tabName = "model", icon = icon("cube")),
             menuItem("Prediction Algorithm", tabName = "algorithm", icon = icon("cogs")),            
             menuItem("Application Code", tabName = "code", icon = icon("code")),
+            menuItem("References", tabName = "refs", icon = icon("university")),
             menuItem("Acknowledgements", tabName = "ack", icon = icon("smile-o")),
             menuItem("Contact Information", tabName = "contact", icon = icon("linkedin"))
         )
@@ -24,20 +26,18 @@ shinyUI(dashboardPage(
             # -----------------------------------------------------------------
             tabItem(tabName = 'predictor',
                     fluidRow(
-                        box(title = "Sentence Input", width = 12, status = "primary", solidHeader = TRUE,
-                            tags$p('Go ahead and type, in', tags$strong('English'), ', in the input text box below. Each key stroke is communicated to the server, 
-                                   hence there is no Submit button to hit to see the predictions of the next word.'),
+                        box(title = "Next Word Predictor", width = 12, status = "primary", solidHeader = TRUE,
+                            tags$p('Go ahead and type in', tags$strong('English'), 'in the input text box below. Each key stroke is communicated to the server, 
+                                   hence there is no Submit button to hit to see the predictions of the next word in your sentence.'),
                             tags$p('The ten buttons below the input text show the weighted probability-ranked predicted words. Click on any button 
-                                   if you see the next word you need. The selected word will be appended to your text.'),
+                                   if you see the next word you need. The selected word will be appended to your sentence.'),
                             tags$p('Go to the', actionLink("link_to_parameters", "Parameters"), 'page to choose different algorithm settings.'),
                             tags$p(tags$strong('Note'), ': Prior to the very first prediction, the model will be (lazy) loaded, which takes a few seconds.'),
-                            tags$p('Have fun!'),
-                            hr(),
                             textInput('sentence',
-                                      'Enter a sentence:',
+                                      'Type your sentence in the input text box below:',
                                       value = "",
                                     width = NULL,
-                                    placeholder = 'Enter a sentence'),
+                                    placeholder = 'Type here...'),
                             actionButton("word_1", label = "-"),
                             actionButton("word_2", label = "-"),
                             actionButton("word_3", label = "-"),
@@ -47,11 +47,14 @@ shinyUI(dashboardPage(
                             actionButton("word_7", label = "-"),
                             actionButton("word_8", label = "-"),
                             actionButton("word_9", label = "-"),
-                            actionButton("word_10", label = "-")
+                            actionButton("word_10", label = "-"),
+                            br(),
+                            actionButton("cleanInputText", label = "Clear Input Box", icon("close"), 
+                                         style="background-color: #a9a9a9;")
                         )
                     ),
                     fluidRow(
-                        box(title = "Proposed Next Words", width = 12, status = "primary", solidHeader = TRUE,
+                        box(title = "Proposed Next Words, Ranked by Decreasing Lambda-Weighted Probability:", width = 12, status = "primary", solidHeader = TRUE,
                             tableOutput('predictionsDT')
                         )
                     )
@@ -98,8 +101,9 @@ shinyUI(dashboardPage(
             # Tab: model
             # -----------------------------------------------------------------
             tabItem(tabName = 'model',
+                    withMathJax(),
                     fluidRow(
-                        box(title = "The English Corpus", width = 12, status = "info", solidHeader = TRUE, collapsible = TRUE, collapsed = TRUE,
+                        box(title = "The Raw English Files", width = 12, status = "info", solidHeader = TRUE, collapsible = TRUE, collapsed = TRUE,
                             tags$p('Our English next-word-in-a-sentence predictor was trained, tested, and validated on
                             the Coursera-provided english version of the Corpus from', tags$a(href = 'www.corpora.heliohost.org', 'HC Corpora')),
                             tags$p('The Corpus contains the three files, or documents, as listed in Table 1 below:'),
@@ -116,50 +120,88 @@ shinyUI(dashboardPage(
                         )
                     ),
                     fluidRow(
-                        box(title = "The Training Dataset", width = 12, status = "info", solidHeader = TRUE, collapsible = TRUE, collapsed = TRUE,
-                            tags$p('Loading of files with R TM Corpus function. Cleaning with TM... Tokenization with RWeka.')
+                        box(title = "English Corpus for Training", width = 12, status = "info", solidHeader = TRUE, collapsible = TRUE, collapsed = TRUE,
+                            includeMarkdown("training.md")
                         )
                     ),
                     fluidRow(
-                        box(title = "Model's Unigrams", width = 12, status = "info", solidHeader = TRUE, collapsible = TRUE, collapsed = TRUE,
+                        box(title = "The N-Grams Model", width = 12, status = "info", solidHeader = TRUE, collapsible = TRUE, collapsed = FALSE,
+                            includeMarkdown("model.md"),
+                            tags$h2("Peeking at the Model Data"),
+                            tags$p("For illustration, the top-5 N-grams, ranked by descending MLE, are shown below (See also the plotting of the top-25 grams ranked by MLE and PU, further down the page.)"),
+                            tags$code("head(model$unigrams[order(logprob, decreasing = TRUE)], n = 5)"),
+                            tableOutput("modelTopUnigramsDT"),
+                            tags$code("head(model$bigrams[order(logprob, decreasing = TRUE)], n = 5)"),
+                            tableOutput("modelTopBigramsDT"),
+                            tags$code("head(model$trigrams[order(logprob, decreasing = TRUE)], n = 5)"),
+                            tableOutput("modelTopTrigramsDT"),
+                            tags$code("head(model$quadgrams[order(logprob, decreasing = TRUE)], n = 5)"),
+                            tableOutput("modelTopQuadgramsDT"),
+                            tags$code("head(model$pentagrams[order(logprob, decreasing = TRUE)], n = 5)"),
+                            tableOutput("modelTopPentagramsDT")
+                        )
+                    ),
+                    fluidRow(
+                        box(title = "Model's Top 25 Unigrams", width = 12, status = "info", solidHeader = TRUE, collapsible = TRUE, collapsed = TRUE,
                             plotOutput(outputId = 'unigramsPlot')
                         )
                     ),
                     fluidRow(
-                        box(title = "Model's Bigrams", width = 12, status = "info", solidHeader = TRUE, collapsible = TRUE, collapsed = TRUE,
+                        box(title = "Model's Top 25 Bigrams", width = 12, status = "info", solidHeader = TRUE, collapsible = TRUE, collapsed = TRUE,
                             plotOutput(outputId = 'bigramsPlot')
                         )
                     ),
                     fluidRow(
-                        box(title = "Model's trigrams", width = 12, status = "info", solidHeader = TRUE, collapsible = TRUE, collapsed = TRUE,
+                        box(title = "Model's Top 25 trigrams", width = 12, status = "info", solidHeader = TRUE, collapsible = TRUE, collapsed = TRUE,
                             plotOutput(outputId = 'trigramsPlot')
                         )
                     ),
                     fluidRow(
-                        box(title = "Model's Quadgrams", width = 12, status = "info", solidHeader = TRUE, collapsible = TRUE, collapsed = TRUE,
+                        box(title = "Model's Top 25 Quadgrams", width = 12, status = "info", solidHeader = TRUE, collapsible = TRUE, collapsed = TRUE,
                             plotOutput(outputId = 'quadgramsPlot')
                         )
                     ),
                     fluidRow(
-                        box(title = "Model's Pentagrams", width = 12, status = "info", solidHeader = TRUE, collapsible = TRUE, collapsed = TRUE,
+                        box(title = "Model's Top 25 Pentagrams", width = 12, status = "info", solidHeader = TRUE, collapsible = TRUE, collapsed = TRUE,
                             plotOutput(outputId = 'pentagramsPlot')
-                        )
-                    ),
-                    fluidRow(
-                        box(title = "The Model", width = 12, status = "info", solidHeader = TRUE, collapsible = TRUE, collapsed = FALSE,
-                            tags$p('*** Describe the Model data structure.')
                         )
                     )
             ),
+            # -----------------------------------------------------------------
             # Tab: algorithm
+            # -----------------------------------------------------------------
             tabItem(tabName = 'algorithm',
                     tags$p("Explain the prediction algorithm here.")
             ),
+            # -----------------------------------------------------------------
             # Tab: code snippets
+            # -----------------------------------------------------------------
             tabItem(tabName = 'code',
-                    tags$p("provide some code snippets.")
+                    fluidRow(
+                        box(title = "Source Control", width = 12, status = "info", solidHeader = TRUE, collapsible = TRUE, collapsed = FALSE,
+                            tags$p("The entire application's code is available in Github", tags$a(href = 'https://github.com/brigaldies/NextWordPredictor', 'here'))
+                        )
+                    ),
+                    fluidRow(
+                        box(title = "Files Partitioning", width = 12, status = "info", solidHeader = TRUE, collapsible = TRUE, collapsed = TRUE,
+                            includeMarkdown("partitionCorpusFile.md")
+                        )
+                    ),
+                    fluidRow(
+                        box(title = "Corpus Building and Cleaning", width = 12, status = "info", solidHeader = TRUE, collapsible = TRUE, collapsed = TRUE,
+                            includeMarkdown("buildCorpusTM.md")
+                        )
+                    )
             ),
+            # -----------------------------------------------------------------
+            # Tab: References
+            # -----------------------------------------------------------------
+            tabItem(tabName = 'refs',
+                    includeMarkdown('references.md')
+            ),
+            # -----------------------------------------------------------------
             # Tab: acknowledgement
+            # -----------------------------------------------------------------
             tabItem(tabName = 'ack',
                     tags$p("The following information sources were instrumental in conducting the research for, and producing, this predictive application:"),
                     tags$ol(
@@ -168,13 +210,16 @@ shinyUI(dashboardPage(
                         tags$ul(
                             tags$li(tags$a(href = 'https://eight2late.wordpress.com/2015/05/27/a-gentle-introduction-to-text-mining-using-r/', 'Gentle Introduction to Text Mining Using R')),
                             tags$li(tags$a(href = 'https://rstudio-pubs-static.s3.amazonaws.com/31867_8236987cf0a8444e962ccd2aec46d9c3.html#plot-word-frequencies', 'Basic Text Mining in R')),
-                            tags$li(tags$a(href = 'https://english.boisestate.edu/johnfry/files/2013/04/bigram-2x2.pdf', 'Bigrams and Trigrams'))
+                            tags$li(tags$a(href = 'https://english.boisestate.edu/johnfry/files/2013/04/bigram-2x2.pdf', 'Bigrams and Trigrams')),
+                            tags$li(tags$a(href = 'https://web.stanford.edu/~jurafsky/slp3/4.pdf', 'Speech and Language Processing, Daniel Jurafsky & James H. martin, January 9, 2015'))
                         ),
                         tags$li(tags$a(href = 'https://en.wikipedia.org/wiki/Katz%27s_back-off_model', 'The Wikipedia page on the Katz\'s Back-Off Model')),
                         tags$li('And, last, but not least, stackoverflow.com! What would we do without it?')
                     )
             ),
+            # -----------------------------------------------------------------
             # Tab: contact information
+            # -----------------------------------------------------------------
             tabItem(tabName = 'contact',
                     tags$p("Find me on LinkedIn", tags$a(href="https://www.linkedin.com/in/bertrandrigaldies", "here."))
             )
