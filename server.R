@@ -2,6 +2,7 @@
 require(stringi)
 require(stringr)
 require(data.table)
+require(ggplot2)
 
 # -----------------------------------------------------------------------------
 # Startup processing (One-time)
@@ -27,7 +28,7 @@ predictionsCount = 0
 # Training data sample rate
 sampleRate = 10
 fileStats = readRDS('./en_US.filestats.rds')
-fileStatsTraining = readRDS(paste0('.', '\\en_US.filestats_partition_', sprintf('%.1f', sampleRate), '.rds'))
+fileStatsTraining = readRDS(paste0('./en_US.filestats_partition_', sprintf('%.1f', sampleRate), '.rds'))
 
 # -----------------------------------------------------------------------------
 # Shiny server
@@ -164,15 +165,83 @@ shinyServer(function(input, output, session) {
         caption = paste0('Table 2: ', sampleRate, '%-sampled English Corpus Documents from HC Corpora'),
         align = "lrrrrr"
     )
+    output$unigramsPlot <- renderPlot({
+        topGramsPlot(model()$unigrams, 'Unigram', sampleRate)    })
+    output$bigramsPlot <- renderPlot({
+        topGramsPlot(model()$bigrams, 'Bigram', sampleRate)
+    })
+    output$trigramsPlot <- renderPlot({
+        topGramsPlot(model()$trigrams, 'Trigram', sampleRate)
+    })
+    output$quadgramsPlot <- renderPlot({
+        topGramsPlot(model()$quadgrams, 'quadgram', sampleRate)
+    })
+    output$pentagramsPlot <- renderPlot({
+        topGramsPlot(model()$pentagrams, 'Pentagram', sampleRate)
+    })
+    
+    
 })
 
 # Helper functions
-message(paste("Action button 'word_2' clicked!"))
 
-# Append the selected word to the end of input$sentence
+# -----------------------------------------------------------------------------
+# Function: processWordButtonClick
+# 
+# Description: Append the selected word to the end of typed sentence in the
+# input text box.
+#
+# Arguments:
+# session     : End-user's connection session.
+# sentence    : The sentence typed thus far.
+# predictions : The predictions.
+# buttonNumber: The button's number (1 through 10).
+#
+# Side effects: Updated text in the input text box.
+#
+# Returns: None.
+# -----------------------------------------------------------------------------
 processWordButtonClick <- function(session, sentence, predictions, buttonNumber) {
     message(paste0("Action button 'word_", buttonNumber, "' clicked!"))
     if (!is.null(predictions)) {
         updateTextInput(session, "sentence", value = paste(sentence, as.character(as.data.table(predictions)[buttonNumber, .(`Predicted Word`)])))
     }
+}
+
+# -----------------------------------------------------------------------------
+# Function: topGramsPlot
+#
+# Description: Plots the top MLE grams.
+#
+# gramsModel    : The n-grams model.
+# gramsModelName: The n-grams model name (e.g., 'unigram', bigram')
+# sampleRate    : The sample (partition) rate to create the training data.
+# topCount      : The number of grams to display in the plot.
+#
+# Side effects: None.
+#
+# Returns: The plot.
+# -----------------------------------------------------------------------------
+fig_num = 1
+topGramsPlot <- function(gramsModel, gramsModelName, sampleRate, topCount = 25, prob = 'MLE') {
+    if (prob == 'MLE') {
+        xlabel = 'Maximum Likelihood Estimation'
+        gramsTopDat = head(gramsModel[order(logprob, decreasing = TRUE)], n = topCount)
+        gramsTopDat$prob = exp(gramsTopDat$logprob)
+    } else if (prob == 'COUNT') {
+        xlabel = 'Percent Used'
+        gramsTopDat = head(gramsModel[order(logpercent, decreasing = TRUE)], n = topCount)
+        gramsTopDat$prob = exp(gramsTopDat$logpercent)
+    } else {
+        stop(paste0('Unknown probability mode argument "', prob, '"'))
+    }
+    plot = ggplot(gramsTopDat, aes(x = factor(gram, levels = gramsTopDat$gram), y = prob)) + 
+        geom_bar(stat = "identity") + 
+        coord_flip() +
+        labs(title=paste0('Figure ', fig_num, ': Top ', topCount, ' Probable ', gramsModelName, 's'), 
+             x=gramsModelName, 
+             y=paste0(xlabel, ' (', sampleRate, '% Sampled English Corpus)')) +
+        theme(plot.title = element_text(size=12, face="bold", margin = margin(10, 0, 10, 0)))
+    fig_num = fig_num + 1
+    plot
 }

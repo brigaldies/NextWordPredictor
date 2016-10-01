@@ -19,7 +19,9 @@ shinyUI(dashboardPage(
     ),
     dashboardBody(
         tabItems(
+            # -----------------------------------------------------------------
             # Tab: Predictor
+            # -----------------------------------------------------------------
             tabItem(tabName = 'predictor',
                     fluidRow(
                         box(title = "Sentence Input", width = 12, status = "primary", solidHeader = TRUE,
@@ -54,7 +56,9 @@ shinyUI(dashboardPage(
                         )
                     )
             ),
+            # -----------------------------------------------------------------
             # Tab: parameters
+            # -----------------------------------------------------------------
             tabItem(tabName = 'parameters',
                     fluidRow(
                         box(title = "Stupid Backoff Algorithm Weight (Lambda)", width = 12, status = "primary", solidHeader = TRUE,
@@ -90,7 +94,9 @@ shinyUI(dashboardPage(
                         box(width = 12, status = "info", actionButton("reset_parameters", label = "Reset parameters to their default values"))
                     )
             ),
+            # -----------------------------------------------------------------
             # Tab: model
+            # -----------------------------------------------------------------
             tabItem(tabName = 'model',
                     fluidRow(
                         box(title = "The English Corpus", width = 12, status = "info", solidHeader = TRUE, collapsible = TRUE, collapsed = TRUE,
@@ -111,8 +117,32 @@ shinyUI(dashboardPage(
                     ),
                     fluidRow(
                         box(title = "The Training Dataset", width = 12, status = "info", solidHeader = TRUE, collapsible = TRUE, collapsed = TRUE,
-                            tags$p('Loading of files with R TM Corpus function. Cleaning with TM... Tokenization with RWeka.'),
-                            tags$p('Plots the unigrams, bigrams, trigrams, quadgrams, and pentagrams.')
+                            tags$p('Loading of files with R TM Corpus function. Cleaning with TM... Tokenization with RWeka.')
+                        )
+                    ),
+                    fluidRow(
+                        box(title = "Model's Unigrams", width = 12, status = "info", solidHeader = TRUE, collapsible = TRUE, collapsed = TRUE,
+                            plotOutput(outputId = 'unigramsPlot')
+                        )
+                    ),
+                    fluidRow(
+                        box(title = "Model's Bigrams", width = 12, status = "info", solidHeader = TRUE, collapsible = TRUE, collapsed = TRUE,
+                            plotOutput(outputId = 'bigramsPlot')
+                        )
+                    ),
+                    fluidRow(
+                        box(title = "Model's trigrams", width = 12, status = "info", solidHeader = TRUE, collapsible = TRUE, collapsed = TRUE,
+                            plotOutput(outputId = 'trigramsPlot')
+                        )
+                    ),
+                    fluidRow(
+                        box(title = "Model's Quadgrams", width = 12, status = "info", solidHeader = TRUE, collapsible = TRUE, collapsed = TRUE,
+                            plotOutput(outputId = 'quadgramsPlot')
+                        )
+                    ),
+                    fluidRow(
+                        box(title = "Model's Pentagrams", width = 12, status = "info", solidHeader = TRUE, collapsible = TRUE, collapsed = TRUE,
+                            plotOutput(outputId = 'pentagramsPlot')
                         )
                     ),
                     fluidRow(

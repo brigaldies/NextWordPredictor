@@ -513,10 +513,9 @@ buildNGramWithMLE3 <- function(corpus, dtm, n, k = 0, lowerOrderNGram, minCount 
                 # The sapply is very slow.
                 # ngramsLowerOrderCount = sapply(ngramsLowerOrderString, function(lowerOrderGram) { as.numeric(lowerOrderNGram[lowerOrderGram][1,count]) }) 
                 # The merge is sub-second!!!!
-                ngramsLowerOrderCount = merge(x = data.table(gram = ngramsLowerOrderString), 
-                                              y = lowerOrderNGram,
-                                              by = 'gram',
-                                              all.x = TRUE)$count
+                ngramsLowerOrderCount = base::merge(x = data.frame(gram = ngramsLowerOrderString),
+                                                    y = data.frame(gram = lowerOrderNGram$gram, count = lowerOrderNGram$count),
+                                                    all.x = TRUE)$count
             } else {
                 # With parallelization with the SNOW package
                 message(paste('Make an 4-wide cluster...'))
@@ -540,7 +539,10 @@ buildNGramWithMLE3 <- function(corpus, dtm, n, k = 0, lowerOrderNGram, minCount 
         # Compute the N-grams' MLE. vectorized calculation is very fast without parallelization.
         message(paste0('Compute the ', n, '-grams MLE...'))
         execTime = system.time({
+            # MLE
             ngramsLogProb = log((ngramsCount + k)/(ngramsLowerOrderCount + k*ngramsTotalCount))
+            # Simple percent use
+            ngramsLogPercent = log(ngramsCount/ngramsTotalCount)
         })
         execTimeSeconds = execTime["elapsed"]
         execTimeMins = execTimeSeconds/60
@@ -557,6 +559,7 @@ buildNGramWithMLE3 <- function(corpus, dtm, n, k = 0, lowerOrderNGram, minCount 
         lowercount =  ngramsLowerOrderCount,
         last_word_in_gram = ngramsLastWord,
         logprob = ngramsLogProb,
+        logpercent = ngramsLogPercent,
         key = "gram")    
 
     message(paste(ngramName, 'unique grams count:', dim(ngramsDat)[1]))
@@ -593,6 +596,7 @@ buildNGramQuanteda <- function(corpus, n) {
         gram = gramsString, 
         count = gramsCount, 
         logprob = gramsLogProb,
+        logpercent = gramsLogProb, # Same as logprob for unigrams
         key = "gram")
 }
 

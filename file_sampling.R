@@ -100,7 +100,11 @@ partitionCorpusFile <- function(directory, file_name, sample_rate) {
             message(paste(linesCount, 'lines read'))
             keepLines <- rbinom(n = linesCount, size = 1, prob = sample_rate)
             sampleLines = unlist(lapply(seq_along(keepLines), function(i) { if (keepLines[i] == 1) lines[[i]] }))
+            # Convert non-ASCII characters
+            sampleLines <- stringi::stri_trans_general(sampleLines, "latin-ascii")
             nonSampleLines = unlist(lapply(seq_along(keepLines), function(i) { if (keepLines[i] == 0) lines[[i]] }))
+            # Convert non-ASCII characters
+            nonSampleLines <- stringi::stri_trans_general(nonSampleLines, "latin-ascii")
             sampleCount = length(sampleLines)
             nonSampleCount = length(nonSampleLines)
             message(paste(sampleCount, 'sampled lines, and', nonSampleCount, 'non-sampled lines'))
