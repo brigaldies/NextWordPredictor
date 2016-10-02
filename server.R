@@ -256,6 +256,15 @@ shinyServer(function(input, output, session) {
         plotPercent = topGramsPlot(10, model()$pentagrams, 'Pentagram', sampleRate, prob = 'COUNT')
         grid.arrange(plotMLE, plotPercent, ncol=2)
     })
+    
+    # -------------------------------------------------------------------------
+    # Algorithm documentation
+    # -------------------------------------------------------------------------
+    output$predictorFlowChart <- renderImage({
+        list(src = 'predictor.jpg', 
+             contentType = 'image/jpg',
+             alt = "This is the flow chart of our next-word predictor")
+    }, deleteFile = FALSE)
 })
 
 # Helper functions

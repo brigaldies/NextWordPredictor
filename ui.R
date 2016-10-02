@@ -171,7 +171,13 @@ shinyUI(dashboardPage(
             # Tab: algorithm
             # -----------------------------------------------------------------
             tabItem(tabName = 'algorithm',
-                    tags$p("Explain the prediction algorithm here.")
+                    fluidRow(
+                        box(title = "Our Implementation FLow Chart of the Stupid Backoff Algorithm", width = 12, status = "info", solidHeader = TRUE, collapsible = TRUE, collapsed = FALSE,
+                            div(style = 'overflow-x: scroll', 
+                                imageOutput("predictorFlowChart", width = "100%", height = "100%")
+                            )
+                        )
+                    )
             ),
             # -----------------------------------------------------------------
             # Tab: code snippets
@@ -197,7 +203,11 @@ shinyUI(dashboardPage(
             # Tab: References
             # -----------------------------------------------------------------
             tabItem(tabName = 'refs',
-                    includeMarkdown('references.md')
+                    fluidRow(
+                        box(title = "References", width = 12, status = "info", solidHeader = TRUE, collapsible = TRUE, collapsed = FALSE,
+                            includeMarkdown('references.md')
+                        )
+                    )
             ),
             # -----------------------------------------------------------------
             # Tab: acknowledgement
@@ -205,15 +215,7 @@ shinyUI(dashboardPage(
             tabItem(tabName = 'ack',
                     tags$p("The following information sources were instrumental in conducting the research for, and producing, this predictive application:"),
                     tags$ol(
-                        tags$li('First, and foremost, my fellow class mates on the Coursera Captone class forum!'),
-                        tags$li('A number of articles suggested by the Coursera Captone class forum, most notably:'),
-                        tags$ul(
-                            tags$li(tags$a(href = 'https://eight2late.wordpress.com/2015/05/27/a-gentle-introduction-to-text-mining-using-r/', 'Gentle Introduction to Text Mining Using R')),
-                            tags$li(tags$a(href = 'https://rstudio-pubs-static.s3.amazonaws.com/31867_8236987cf0a8444e962ccd2aec46d9c3.html#plot-word-frequencies', 'Basic Text Mining in R')),
-                            tags$li(tags$a(href = 'https://english.boisestate.edu/johnfry/files/2013/04/bigram-2x2.pdf', 'Bigrams and Trigrams')),
-                            tags$li(tags$a(href = 'https://web.stanford.edu/~jurafsky/slp3/4.pdf', 'Speech and Language Processing, Daniel Jurafsky & James H. martin, January 9, 2015'))
-                        ),
-                        tags$li(tags$a(href = 'https://en.wikipedia.org/wiki/Katz%27s_back-off_model', 'The Wikipedia page on the Katz\'s Back-Off Model')),
+                        tags$li('First, and foremost, my fellow class mates and TAs on the Coursera Captone class forum!'),
                         tags$li('And, last, but not least, stackoverflow.com! What would we do without it?')
                     )
             ),
