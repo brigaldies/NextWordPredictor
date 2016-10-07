@@ -221,27 +221,22 @@ remove(modelUnderTest)
 modelUnderTest = list()
 
 # Load the unigrams
-# modelUnderTest$unigrams = unigramsDat[count >= 2][, .(gram, logprob)][order(logprob, decreasing = TRUE)]
 modelUnderTest$unigrams = unigramsDat[count >= 2 & logprob != 0][, .(gram, count, logprob, logpercent)][order(logprob, decreasing = TRUE)]
 setkey(modelUnderTest$unigrams, gram)
 
 # Load the bigrams
-# modelUnderTest$bigrams = bigramsDat2[count >= 2][, .(gram, lowergram, logprob, last_word_in_gram)][order(logprob, decreasing = TRUE)]
 modelUnderTest$bigrams = bigramsDat2[count >= 2 & logprob != 0][, .(gram, count, lowergram, logprob, logpercent, last_word_in_gram)][order(logprob, decreasing = TRUE)]
 setkey(modelUnderTest$bigrams, lowergram)
 
 # Load the trigrams
-# modelUnderTest$trigrams = trigramsDat2[count >= 2][, .(gram, lowergram, logprob, last_word_in_gram)][order(logprob, decreasing = TRUE)]
 modelUnderTest$trigrams = trigramsDat2[count >= 2 & logprob != 0][, .(gram, count, lowergram, logprob, logpercent, last_word_in_gram)][order(logprob, decreasing = TRUE)]
 setkey(modelUnderTest$trigrams, lowergram)
 
 # Load the quadgrams
-# modelUnderTest$quadgrams = quadgramsDat2[count >= 2][, .(gram, lowergram, logprob, last_word_in_gram)][order(logprob, decreasing = TRUE)]
 modelUnderTest$quadgrams = quadgramsDat2[count >= 2 & logprob != 0][, .(gram, count, lowergram, logprob, logpercent, last_word_in_gram)][order(logprob, decreasing = TRUE)]
 setkey(modelUnderTest$quadgrams, lowergram)
 
 # Load the pentagrams
-# modelUnderTest$pentagrams = pentagramsDat2[count >= 2][, .(gram, lowergram, logprob, last_word_in_gram)][order(logprob, decreasing = TRUE)]
 modelUnderTest$pentagrams = pentagramsDat2[count >= 2 & logprob != 0][, .(gram, count, lowergram, logprob, logpercent, last_word_in_gram)][order(logprob, decreasing = TRUE)]
 setkey(modelUnderTest$pentagrams, lowergram)
 

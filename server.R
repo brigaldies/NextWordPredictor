@@ -108,7 +108,7 @@ shinyServer(function(input, output, session) {
         n = isolate(as.numeric(input$ngram))
         message(paste('N-gram:', n))
         traceFlag = FALSE # TODO: Add a parameter to set tracing
-        predictions = predictWithStupidBackoff2(model = model(), n = n, sentence = sentence, lambda = lambda, trace = traceFlag) 
+        predictions = predictWithStupidBackoff(model = model(), n = n, sentence = sentence, lambda = lambda, trace = traceFlag) 
         predictions
     })
     
