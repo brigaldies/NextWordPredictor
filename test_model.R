@@ -236,7 +236,6 @@ execTimeMins = execTimeSeconds/60
 execTimeSecsAfterMins = execTimeSeconds %% 60
 message(paste('Test executed in', round(execTimeMins), 'mins, ', round(execTimeSecsAfterMins, 2), 'secs'))
 
-
 # -----------------------------------------------------------------------------
 # Mixed N-Grams Test
 # -----------------------------------------------------------------------------
