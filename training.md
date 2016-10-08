@@ -1,8 +1,8 @@
 The English Corpus was produced by executing the following **reproducible** steps:
 
-1. Randomly (seed-based for reproducibility) select 10% (our "sampling rate") of the lines in the raw English files (news, blogs, twitter);
+1. Randomly (seed-based for reproducibility) select 10% (our "sampling rate") of the lines in the raw English files (news, blogs, twitter). All sampled files are converted to the ASCII Latin-1 character set with `stringi::stri_trans_general(line, 'latin-ascii')`;
 2. Persist the selected lines into separate "training" files, for later viewing if necessary;
-3. Load of the training files into an English Corpus using the R `TM` package function `Corpus`;
+3. Load the training files into an English Corpus using the R `TM` package function `Corpus`;
 4. Clean/pre-process the loaded lines with the `TM` package function `tm_map` with the *transformers* listed below:
     + Convert to lower-case (`tm_map(corpus, content_transformer(tolower))`)
     + Remove punctuation (`tm_map(corpus, removePunctuation)`)

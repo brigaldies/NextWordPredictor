@@ -31,13 +31,14 @@ shinyUI(dashboardPage(
                                    hence there is no Submit button to hit to see the predictions of the next word in your sentence.'),
                             tags$p('The ten buttons below the input text show the weighted probability-ranked predicted words. Click on any button 
                                    if you see the next word you need. The selected word will be appended to your sentence.'),
-                            tags$p('Go to the', actionLink("link_to_parameters", "Parameters"), 'page to choose different algorithm settings.'),
+                            tags$p('Go to the', actionLink("link_to_parameters", "Parameters"), 'page to choose different algorithm settings.',
+                                   'Click', tags$a(href = 'http://rpubs.com/brigaldies/dscapstonenextwordpredictor', 'here'), 'for a slides presentation on', tags$strong('Word Predictor 1.0')),
                             tags$p(tags$strong('Note'), ': Prior to the very first prediction, the model will be (lazy) loaded, which takes a few seconds.'),
                             textInput('sentence',
                                       'Type your sentence in the input text box below:',
                                       value = "",
                                     width = NULL,
-                                    placeholder = 'Type here...'),
+                                    placeholder = 'Type here'),
                             actionButton("word_1", label = "-"),
                             actionButton("word_2", label = "-"),
                             actionButton("word_3", label = "-"),
@@ -55,7 +56,10 @@ shinyUI(dashboardPage(
                     ),
                     fluidRow(
                         box(title = "Proposed Next Words, Ranked by Decreasing Lambda-Weighted Probability:", width = 12, status = "primary", solidHeader = TRUE,
-                            tableOutput('predictionsDT')
+                            fluidRow(
+                                column(6, tableOutput('predictionsDT')),
+                                column(6, plotOutput('predictionsPlot'))
+                            )
                         )
                     )
             ),
@@ -127,7 +131,7 @@ shinyUI(dashboardPage(
                     fluidRow(
                         box(title = "The N-Grams Model", width = 12, status = "info", solidHeader = TRUE, collapsible = TRUE, collapsed = FALSE,
                             includeMarkdown("model.md"),
-                            tags$h2("Peeking at the Model Data"),
+                            tags$h2("Peeking at the Model"),
                             tags$p("For illustration, the top-5 N-grams, ranked by descending MLE, are shown below (See also the plotting of the top-25 grams ranked by MLE and PU, further down the page.)"),
                             tags$code("head(model$unigrams[order(logprob, decreasing = TRUE)], n = 5)"),
                             tableOutput("modelTopUnigramsDT"),
@@ -138,7 +142,10 @@ shinyUI(dashboardPage(
                             tags$code("head(model$quadgrams[order(logprob, decreasing = TRUE)], n = 5)"),
                             tableOutput("modelTopQuadgramsDT"),
                             tags$code("head(model$pentagrams[order(logprob, decreasing = TRUE)], n = 5)"),
-                            tableOutput("modelTopPentagramsDT")
+                            tableOutput("modelTopPentagramsDT"),
+                            includeMarkdown("testmodel.md"),
+                            tags$p('For illustration, a few test examples are shown below:'),
+                            tableOutput("modelTestExamplesDT")
                         )
                     ),
                     fluidRow(
@@ -172,7 +179,8 @@ shinyUI(dashboardPage(
             # -----------------------------------------------------------------
             tabItem(tabName = 'algorithm',
                     fluidRow(
-                        box(title = "Our Implementation FLow Chart of the Stupid Backoff Algorithm", width = 12, status = "info", solidHeader = TRUE, collapsible = TRUE, collapsed = FALSE,
+                        box(title = "Our Implementation Flow Chart of the Stupid Backoff Algorithm", width = 12, status = "info", solidHeader = TRUE, collapsible = TRUE, collapsed = FALSE,
+                            includeMarkdown("predictor.md"),
                             div(style = 'overflow-x: scroll', 
                                 imageOutput("predictorFlowChart", width = "100%", height = "100%")
                             )
@@ -197,6 +205,21 @@ shinyUI(dashboardPage(
                         box(title = "Corpus Building and Cleaning", width = 12, status = "info", solidHeader = TRUE, collapsible = TRUE, collapsed = TRUE,
                             includeMarkdown("buildCorpusTM.md")
                         )
+                    ),
+                    fluidRow(
+                        box(title = "N-Gram Building", width = 12, status = "info", solidHeader = TRUE, collapsible = TRUE, collapsed = TRUE,
+                            includeMarkdown("buildNGram.md")
+                        )
+                    ),
+                    fluidRow(
+                        box(title = "Predictor", width = 12, status = "info", solidHeader = TRUE, collapsible = TRUE, collapsed = TRUE,
+                            includeMarkdown("predictWithStupidBackoff.md")
+                        )
+                    ),
+                    fluidRow(
+                        box(title = "Model Test", width = 12, status = "info", solidHeader = TRUE, collapsible = TRUE, collapsed = TRUE,
+                            includeMarkdown("testmodelCode.md")
+                        )
                     )
             ),
             # -----------------------------------------------------------------
@@ -204,7 +227,7 @@ shinyUI(dashboardPage(
             # -----------------------------------------------------------------
             tabItem(tabName = 'refs',
                     fluidRow(
-                        box(title = "References", width = 12, status = "info", solidHeader = TRUE, collapsible = TRUE, collapsed = FALSE,
+                        box(title = "References", width = 12, status = "info", solidHeader = TRUE, collapsible = FALSE, collapsed = FALSE,
                             includeMarkdown('references.md')
                         )
                     )
@@ -213,17 +236,21 @@ shinyUI(dashboardPage(
             # Tab: acknowledgement
             # -----------------------------------------------------------------
             tabItem(tabName = 'ack',
-                    tags$p("The following information sources were instrumental in conducting the research for, and producing, this predictive application:"),
-                    tags$ol(
-                        tags$li('First, and foremost, my fellow class mates and TAs on the Coursera Captone class forum!'),
-                        tags$li('And, last, but not least, stackoverflow.com! What would we do without it?')
+                    fluidRow(
+                        box(title = "Acknowledgements", width = 12, status = "info", solidHeader = TRUE, collapsible = FALSE, collapsed = FALSE,
+                            includeMarkdown('acknowledgement.md')
+                        )
                     )
             ),
             # -----------------------------------------------------------------
             # Tab: contact information
             # -----------------------------------------------------------------
             tabItem(tabName = 'contact',
-                    tags$p("Find me on LinkedIn", tags$a(href="https://www.linkedin.com/in/bertrandrigaldies", "here."))
+                    fluidRow(
+                        box(title = "Contact Information", width = 12, status = "info", solidHeader = TRUE, collapsible = FALSE, collapsed = FALSE,
+                            tags$p("Find me on LinkedIn", tags$a(href="https://www.linkedin.com/in/bertrandrigaldies", "here."))
+                        )
+                    )
             )
         )
     )

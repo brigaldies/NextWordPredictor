@@ -170,6 +170,16 @@ shinyServer(function(input, output, session) {
         digits = 4
     )
     
+    output$predictionsPlot <- renderPlot({
+        plotData = dataset()
+        ggplot(plotData, 
+               aes(x = factor(`Predicted Word`, levels = rev(plotData$`Predicted Word`)), 
+                   y = `Weighted Probability`)) + 
+            geom_bar(stat = "identity") + 
+            coord_flip() + 
+            labs(x='Predicted Words (Desc. weighted probability)')
+    })
+    
     # -------------------------------------------------------------------------
     # Update the 10 buttons below the input text box to show the top 10 predicted
     # words
@@ -205,6 +215,25 @@ shinyServer(function(input, output, session) {
         caption = paste0('Table 2: ', sampleRate, '%-sampled English Corpus Documents from HC Corpora'),
         align = "lrrrrr"
     )
+    output$modelTestExamplesDT <- renderTable({
+        SampleTestData = readRDS(file = 'sampleTestData.rds')   
+        testPredictions = mapply(function(lowergram) {
+            stri_paste(predictWithStupidBackoff(model = model(),
+                                                sentence = lowergram)$`Predicted Word`, collapse = ', ')
+        },
+        SampleTestData$lowergram)
+        testResults = mapply(function(lowergram, word_to_predict) {
+            ifelse(word_to_predict %in% predictWithStupidBackoff(model = model(),
+                                                                 sentence = lowergram)$`Predicted Word`,
+                   'PASS', 'FAIL')
+        },
+        SampleTestData$lowergram,
+        SampleTestData$word_to_predict)
+        data.table(`Test Gram` = SampleTestData$gram,
+                   `Word to Predict` = SampleTestData$word_to_predict,
+                   `Top 10 Predicted Words` = testPredictions,
+                   `Test Result` = testResults)
+    }, align = "llll")
     output$modelTopUnigramsDT <- renderTable(
         head(model()$unigrams[order(logprob, decreasing = TRUE)], n = 5),
         display = c('s','s','d','f','f'),

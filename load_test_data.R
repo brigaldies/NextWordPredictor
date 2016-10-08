@@ -32,4 +32,7 @@ testData = rbind(
     sample_n(testPentagramsDT, testNGramSize)
 )
 
-sample_n(testData, size = 10)
+set.seed(10)
+sampleTestData = sample_n(testData, size = 10)
+saveRDS(object = sampleTestData, file = 'sampleTestData.rds')
+object.size(testData)/1024/1024

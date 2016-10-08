@@ -7,8 +7,15 @@ model.rds
 en_US.filestats.rds
 en_US.filestats_partition_10.0.rds
 training.md
+model.md
+testmodel.md
+predictor.md
 partitionCorpusFile.md
 buildCorpusTM.md
-model.md
+buildNGram.md
+predictWithStupidBackoff.md
+testmodelCode.md
 references.md
+acknowledgement.md
 predictor.jpg
+sampleTestData.rds
